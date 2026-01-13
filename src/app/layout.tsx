@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'SControlSafe',
+  title: 'ControlSafe',
   description: 'Control Avanzado para la Seguridad Minera',
 };
 

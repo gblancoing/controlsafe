@@ -20,7 +20,7 @@ export function AppSidebar() {
                 <Truck className="size-6" />
             </div>
             <h1 className="text-xl font-semibold font-headline text-primary">
-              SControlSafe
+              ControlSafe
             </h1>
         </div>
       </SidebarHeader>
