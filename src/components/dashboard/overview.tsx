@@ -1,0 +1,38 @@
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { mockMaintenanceTasks, mockVehicles } from '@/lib/data';
+import { Truck, Wrench, AlertTriangle, Building } from 'lucide-react';
+
+export function Overview() {
+  const totalVehicles = mockVehicles.length;
+  const operationalVehicles = mockVehicles.filter(v => v.status === 'Operational').length;
+  const overdueTasks = mockMaintenanceTasks.filter(t => t.status === 'Overdue').length;
+  const totalSites = new Set(mockVehicles.map(v => v.site)).size;
+
+  const stats = [
+    { title: 'Total Vehicles', value: totalVehicles, icon: Truck, color: 'text-primary' },
+    { title: 'Operational', value: `${operationalVehicles} / ${totalVehicles}`, icon: Wrench, color: 'text-green-600' },
+    { title: 'Overdue Tasks', value: overdueTasks, icon: AlertTriangle, color: overdueTasks > 0 ? 'text-red-600' : 'text-muted-foreground' },
+    { title: 'Active Sites', value: totalSites, icon: Building, color: 'text-primary' },
+  ];
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {stats.map((stat) => (
+        <Card key={stat.title}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+            <stat.icon className={`h-4 w-4 text-muted-foreground ${stat.color}`} />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stat.value}</div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
