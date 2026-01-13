@@ -14,10 +14,10 @@ export function Overview() {
   const totalSites = new Set(mockVehicles.map(v => v.site)).size;
 
   const stats = [
-    { title: 'Total Vehicles', value: totalVehicles, icon: Truck, color: 'text-primary' },
-    { title: 'Operational', value: `${operationalVehicles} / ${totalVehicles}`, icon: Wrench, color: 'text-green-600' },
-    { title: 'Overdue Tasks', value: overdueTasks, icon: AlertTriangle, color: overdueTasks > 0 ? 'text-red-600' : 'text-muted-foreground' },
-    { title: 'Active Sites', value: totalSites, icon: Building, color: 'text-primary' },
+    { title: 'Vehículos Totales', value: totalVehicles, icon: Truck, color: 'text-primary' },
+    { title: 'Operacionales', value: `${operationalVehicles} / ${totalVehicles}`, icon: Wrench, color: 'text-green-600' },
+    { title: 'Tareas Atrasadas', value: overdueTasks, icon: AlertTriangle, color: overdueTasks > 0 ? 'text-red-600' : 'text-muted-foreground' },
+    { title: 'Faenas Activas', value: totalSites, icon: Building, color: 'text-primary' },
   ];
 
   return (

@@ -39,7 +39,7 @@ export function PredictiveAdvisor() {
         setError(result.error);
         toast({
           variant: "destructive",
-          title: "Analysis Failed",
+          title: "Análisis Fallido",
           description: result.error,
         });
       } else {
@@ -53,24 +53,24 @@ export function PredictiveAdvisor() {
       <CardHeader>
         <div className="flex items-start justify-between">
           <div>
-            <CardTitle>Predictive Maintenance Advisor</CardTitle>
-            <CardDescription>AI-powered insights for your fleet.</CardDescription>
+            <CardTitle>Asesor de Mantenimiento Predictivo</CardTitle>
+            <CardDescription>Análisis con IA para su flota.</CardDescription>
           </div>
           <Bot className="h-6 w-6 text-primary" />
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
         <div className="text-sm text-muted-foreground mb-4">
-          Analyze maintenance history for{' '}
-          <span className="font-semibold text-foreground">{targetVehicle.name}</span> to identify potential issues and get actionable recommendations.
+          Analizar el historial de mantenimiento de{' '}
+          <span className="font-semibold text-foreground">{targetVehicle.name}</span> para identificar problemas potenciales y obtener recomendaciones.
         </div>
         
         {isPending && (
             <div className="flex items-center justify-center rounded-lg border border-dashed p-8">
                 <div className="flex flex-col items-center gap-2 text-center">
                     <Loader className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-sm font-medium">Analyzing records...</p>
-                    <p className="text-xs text-muted-foreground">The AI is reviewing maintenance history.</p>
+                    <p className="text-sm font-medium">Analizando registros...</p>
+                    <p className="text-xs text-muted-foreground">La IA está revisando el historial de mantenimiento.</p>
                 </div>
             </div>
         )}
@@ -86,7 +86,7 @@ export function PredictiveAdvisor() {
         {advice && !isPending && (
           <Alert>
             <Lightbulb className="h-4 w-4" />
-            <AlertTitle>AI Recommendation</AlertTitle>
+            <AlertTitle>Recomendación de la IA</AlertTitle>
             <AlertDescription>
               <pre className="whitespace-pre-wrap font-body text-sm">{advice}</pre>
             </AlertDescription>
@@ -96,8 +96,8 @@ export function PredictiveAdvisor() {
         {!advice && !error && !isPending && (
              <div className="flex items-center justify-center rounded-lg border border-dashed p-8">
                 <div className="flex flex-col items-center gap-2 text-center">
-                    <p className="text-sm font-medium">Ready to Analyze</p>
-                    <p className="text-xs text-muted-foreground">Click the button below to start.</p>
+                    <p className="text-sm font-medium">Listo para Analizar</p>
+                    <p className="text-xs text-muted-foreground">Haga clic en el botón de abajo para comenzar.</p>
                 </div>
             </div>
         )}
@@ -105,7 +105,7 @@ export function PredictiveAdvisor() {
       </CardContent>
       <CardFooter>
         <Button onClick={handleAnalysis} disabled={isPending} className="w-full">
-          {isPending ? 'Analyzing...' : `Analyze ${targetVehicle.name}`}
+          {isPending ? 'Analizando...' : `Analizar ${targetVehicle.name}`}
         </Button>
       </CardFooter>
     </Card>

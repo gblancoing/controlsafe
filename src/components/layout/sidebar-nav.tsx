@@ -19,16 +19,16 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { href: '#', icon: LayoutDashboard, label: 'Dashboard', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
-  { href: '#', icon: Building, label: 'Companies', requiredRoles: ['Administrator'] },
-  { href: '#', icon: Map, label: 'Regions', requiredRoles: ['Administrator', 'Supervisor'] },
-  { href: '#', icon: MapPin, label: 'Sites', requiredRoles: ['Administrator', 'Supervisor'] },
-  { href: '#', icon: Truck, label: 'Fleet', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
-  { href: '#', icon: Wrench, label: 'Maintenance', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
-  { href: '#', icon: ShieldCheck, label: 'Torque Control', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
-  { href: '#', icon: FileText, label: 'Reports', requiredRoles: ['Administrator', 'Supervisor'] },
-  { href: '#', icon: Users, label: 'Users', requiredRoles: ['Administrator'] },
-  { href: '#', icon: Settings, label: 'Settings', requiredRoles: ['Administrator'] },
+  { href: '#', icon: LayoutDashboard, label: 'Panel de Control', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
+  { href: '#', icon: Building, label: 'Empresas', requiredRoles: ['Administrator'] },
+  { href: '#', icon: Map, label: 'Regiones', requiredRoles: ['Administrator', 'Supervisor'] },
+  { href: '#', icon: MapPin, label: 'Faenas', requiredRoles: ['Administrator', 'Supervisor'] },
+  { href: '#', icon: Truck, label: 'Flota', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
+  { href: '#', icon: Wrench, label: 'Mantenimiento', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
+  { href: '#', icon: ShieldCheck, label: 'Control de Torque', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
+  { href: '#', icon: FileText, label: 'Reportes', requiredRoles: ['Administrator', 'Supervisor'] },
+  { href: '#', icon: Users, label: 'Usuarios', requiredRoles: ['Administrator'] },
+  { href: '#', icon: Settings, label: 'Configuración', requiredRoles: ['Administrator'] },
 ];
 
 export function SidebarNav({ currentUser }: { currentUser: User }) {
@@ -41,7 +41,7 @@ export function SidebarNav({ currentUser }: { currentUser: User }) {
           <SidebarMenuItem key={item.label}>
             <SidebarMenuButton
               href={item.href}
-              isActive={item.label === 'Dashboard'}
+              isActive={item.label === 'Panel de Control'}
               tooltip={item.label}
             >
               <item.icon />

@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { mockMaintenanceTasks, mockVehicles } from '@/lib/data';
 import { format, formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { PlusCircle } from 'lucide-react';
 import {
   Dialog,
@@ -33,7 +34,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 export function MaintenanceSchedule() {
   const getVehicleName = (vehicleId: string) => {
-    return mockVehicles.find((v) => v.id === vehicleId)?.name || 'Unknown Vehicle';
+    return mockVehicles.find((v) => v.id === vehicleId)?.name || 'Vehículo Desconocido';
+  };
+
+  const statusTranslations: { [key: string]: string } = {
+    'Overdue': 'Atrasado',
+    'Completed': 'Completado',
+    'In Progress': 'En Progreso',
+    'Scheduled': 'Programado'
+  };
+
+  const priorityTranslations: { [key: string]: string } = {
+      'High': 'Alta',
+      'Medium': 'Media',
+      'Low': 'Baja'
   };
 
   const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
@@ -57,29 +71,29 @@ export function MaintenanceSchedule() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle>Maintenance Schedule</CardTitle>
-          <CardDescription>Upcoming and overdue maintenance tasks.</CardDescription>
+          <CardTitle>Plan de Mantenimiento</CardTitle>
+          <CardDescription>Tareas de mantenimiento próximas y atrasadas.</CardDescription>
         </div>
         <Dialog>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1">
               <PlusCircle className="h-4 w-4" />
-              Schedule
+              Programar
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Schedule New Maintenance</DialogTitle>
+              <DialogTitle>Programar Nuevo Mantenimiento</DialogTitle>
               <DialogDescription>
-                Fill in the details to add a new maintenance task.
+                Complete los detalles para agregar una nueva tarea de mantenimiento.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="vehicle" className="text-right">Vehicle</Label>
+                <Label htmlFor="vehicle" className="text-right">Vehículo</Label>
                 <Select>
                   <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select a vehicle" />
+                    <SelectValue placeholder="Seleccione un vehículo" />
                   </SelectTrigger>
                   <SelectContent>
                     {mockVehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
@@ -87,16 +101,16 @@ export function MaintenanceSchedule() {
                 </Select>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="task" className="text-right">Task</Label>
-                <Input id="task" placeholder="e.g., Engine Oil Change" className="col-span-3" />
+                <Label htmlFor="task" className="text-right">Tarea</Label>
+                <Input id="task" placeholder="Ej: Cambio de aceite del motor" className="col-span-3" />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="dueDate" className="text-right">Due Date</Label>
+                <Label htmlFor="dueDate" className="text-right">Fecha Límite</Label>
                 <Input id="dueDate" type="date" className="col-span-3" />
               </div>
             </div>
             <DialogFooter>
-              <Button type="submit">Schedule Task</Button>
+              <Button type="submit">Programar Tarea</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -105,11 +119,11 @@ export function MaintenanceSchedule() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Vehicle</TableHead>
-              <TableHead>Task</TableHead>
-              <TableHead>Due</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Vehículo</TableHead>
+              <TableHead>Tarea</TableHead>
+              <TableHead>Vencimiento</TableHead>
+              <TableHead>Prioridad</TableHead>
+              <TableHead>Estado</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -118,13 +132,13 @@ export function MaintenanceSchedule() {
                 <TableCell className="font-medium">{getVehicleName(task.vehicleId)}</TableCell>
                 <TableCell>{task.task}</TableCell>
                 <TableCell>
-                  {formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}
+                  {formatDistanceToNow(new Date(task.dueDate), { addSuffix: true, locale: es })}
                 </TableCell>
                 <TableCell>
-                  <Badge variant={getPriorityVariant(task.priority)}>{task.priority}</Badge>
+                  <Badge variant={getPriorityVariant(task.priority)}>{priorityTranslations[task.priority]}</Badge>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={getStatusVariant(task.status)}>{task.status}</Badge>
+                  <Badge variant={getStatusVariant(task.status)}>{statusTranslations[task.status]}</Badge>
                 </TableCell>
               </TableRow>
             ))}

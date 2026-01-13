@@ -16,15 +16,22 @@ import {
 import { mockVehicles } from '@/lib/data';
 import { PieChart, Pie, Cell } from 'recharts';
 
+const statusTranslations: { [key: string]: string } = {
+  'Operational': 'Operacional',
+  'Maintenance': 'Mantenimiento',
+  'Out of Service': 'Fuera de Servicio',
+};
+
 const statusColors: { [key: string]: string } = {
-  'Operational': 'hsl(var(--chart-1))',
-  'Maintenance': 'hsl(var(--chart-2))',
-  'Out of Service': 'hsl(var(--destructive))',
+  'Operacional': 'hsl(var(--chart-1))',
+  'Mantenimiento': 'hsl(var(--chart-2))',
+  'Fuera de Servicio': 'hsl(var(--destructive))',
 };
 
 const chartData = Object.entries(
     mockVehicles.reduce((acc, vehicle) => {
-        acc[vehicle.status] = (acc[vehicle.status] || 0) + 1;
+        const translatedStatus = statusTranslations[vehicle.status] || vehicle.status;
+        acc[translatedStatus] = (acc[translatedStatus] || 0) + 1;
         return acc;
     }, {} as Record<string, number>)
 ).map(([status, count]) => ({ status, count, fill: statusColors[status] }));
@@ -32,18 +39,18 @@ const chartData = Object.entries(
 
 const chartConfig = {
   count: {
-    label: 'Vehicles',
+    label: 'Vehículos',
   },
-  Operational: {
-    label: 'Operational',
+  'Operacional': {
+    label: 'Operacional',
     color: 'hsl(var(--chart-1))',
   },
-  Maintenance: {
-    label: 'Maintenance',
+  'Mantenimiento': {
+    label: 'Mantenimiento',
     color: 'hsl(var(--chart-2))',
   },
-  'Out of Service': {
-    label: 'Out of Service',
+  'Fuera de Servicio': {
+    label: 'Fuera de Servicio',
     color: 'hsl(var(--destructive))',
   },
 };
@@ -52,8 +59,8 @@ export function FleetOverviewChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Fleet Status</CardTitle>
-        <CardDescription>Distribution of vehicle statuses</CardDescription>
+        <CardTitle>Estado de la Flota</CardTitle>
+        <CardDescription>Distribución de los estados de los vehículos</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer
