@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { mockMaintenanceTasks, mockVehicles } from '@/lib/data';
+import { getMaintenanceTasks, getVehicles } from '@/lib/db-queries';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PlusCircle } from 'lucide-react';
@@ -32,9 +32,12 @@ import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
-export function MaintenanceSchedule() {
+export async function MaintenanceSchedule() {
+  const vehicles = await getVehicles();
+  const tasks = await getMaintenanceTasks();
+  
   const getVehicleName = (vehicleId: string) => {
-    return mockVehicles.find((v) => v.id === vehicleId)?.name || 'Vehículo Desconocido';
+    return vehicles.find((v) => v.id === vehicleId)?.name || 'Vehículo Desconocido';
   };
 
   const statusTranslations: { [key: string]: string } = {
@@ -96,7 +99,7 @@ export function MaintenanceSchedule() {
                     <SelectValue placeholder="Seleccione un vehículo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockVehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                    {vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -127,7 +130,7 @@ export function MaintenanceSchedule() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {mockMaintenanceTasks.map((task) => (
+            {tasks.map((task) => (
               <TableRow key={task.id}>
                 <TableCell className="font-medium">{getVehicleName(task.vehicleId)}</TableCell>
                 <TableCell>{task.task}</TableCell>

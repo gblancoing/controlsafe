@@ -5,6 +5,8 @@ import {
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import type { User } from '@/lib/types';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Truck,
@@ -14,24 +16,23 @@ import {
   Settings,
   FileText,
   Building,
-  Map,
   MapPin,
 } from 'lucide-react';
 
 const navItems = [
-  { href: '#', icon: LayoutDashboard, label: 'Panel de Control', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
-  { href: '#', icon: Building, label: 'Empresas', requiredRoles: ['Administrator'] },
-  { href: '#', icon: Map, label: 'Regiones', requiredRoles: ['Administrator', 'Supervisor'] },
-  { href: '#', icon: MapPin, label: 'Faenas', requiredRoles: ['Administrator', 'Supervisor'] },
-  { href: '#', icon: Truck, label: 'Flota', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
-  { href: '#', icon: Wrench, label: 'Mantenimiento', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
-  { href: '#', icon: ShieldCheck, label: 'Control de Torque', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
-  { href: '#', icon: FileText, label: 'Reportes', requiredRoles: ['Administrator', 'Supervisor'] },
-  { href: '#', icon: Users, label: 'Usuarios', requiredRoles: ['Administrator'] },
-  { href: '#', icon: Settings, label: 'Configuración', requiredRoles: ['Administrator'] },
+  { href: '/', icon: LayoutDashboard, label: 'Panel de Control', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
+  { href: '/empresas', icon: Building, label: 'Empresas', requiredRoles: ['Administrator'] },
+  { href: '/faenas', icon: MapPin, label: 'Proyectos', requiredRoles: ['Administrator', 'Supervisor'] },
+  { href: '/flota', icon: Truck, label: 'Flota', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
+  { href: '/mantenimiento', icon: Wrench, label: 'Mantenimiento', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
+  { href: '/torque', icon: ShieldCheck, label: 'Control de Torque', requiredRoles: ['Administrator', 'Supervisor', 'Technician'] },
+  { href: '/reportes', icon: FileText, label: 'Reportes', requiredRoles: ['Administrator', 'Supervisor'] },
+  { href: '/usuarios', icon: Users, label: 'Usuarios', requiredRoles: ['Administrator'] },
+  { href: '/configuracion', icon: Settings, label: 'Configuración', requiredRoles: ['Administrator'] },
 ];
 
 export function SidebarNav({ currentUser }: { currentUser: User }) {
+  const pathname = usePathname();
   const hasRole = (roles: string[]) => roles.includes(currentUser.role);
 
   return (
@@ -40,12 +41,14 @@ export function SidebarNav({ currentUser }: { currentUser: User }) {
         hasRole(item.requiredRoles) ? (
           <SidebarMenuItem key={item.label}>
             <SidebarMenuButton
-              href={item.href}
-              isActive={item.label === 'Panel de Control'}
+              asChild
+              isActive={pathname === item.href}
               tooltip={item.label}
             >
-              <item.icon />
-              <span>{item.label}</span>
+              <Link href={item.href}>
+                <item.icon />
+                <span>{item.label}</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : null

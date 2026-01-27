@@ -7,7 +7,7 @@ import { TorqueLog } from '@/components/dashboard/torque-log';
 import { PredictiveAdvisor } from '@/components/dashboard/predictive-advisor';
 import { FleetOverviewChart } from '@/components/dashboard/fleet-overview-chart';
 
-export default function Home() {
+export default async function Home() {
   return (
     <SidebarProvider>
       <AppSidebar />

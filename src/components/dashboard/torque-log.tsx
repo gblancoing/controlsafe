@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { mockTorqueRecords, mockVehicles } from '@/lib/data';
+import { getTorqueRecords, getVehicles } from '@/lib/db-queries';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { CheckCircle2, XCircle, PlusCircle } from 'lucide-react';
@@ -32,9 +32,12 @@ import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
-export function TorqueLog() {
+export async function TorqueLog() {
+  const vehicles = await getVehicles();
+  const records = await getTorqueRecords();
+  
   const getVehicleName = (vehicleId: string) => {
-    return mockVehicles.find((v) => v.id === vehicleId)?.name || 'Desconocido';
+    return vehicles.find((v) => v.id === vehicleId)?.name || 'Desconocido';
   };
 
   return (
@@ -66,7 +69,7 @@ export function TorqueLog() {
                     <SelectValue placeholder="Seleccione un vehículo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockVehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                    {vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -100,7 +103,7 @@ export function TorqueLog() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {mockTorqueRecords.map((record) => (
+            {records.map((record) => (
               <TableRow key={record.id}>
                 <TableCell>
                   <div className="font-medium">{getVehicleName(record.vehicleId)}</div>

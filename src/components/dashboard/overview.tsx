@@ -4,14 +4,17 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { mockMaintenanceTasks, mockVehicles } from '@/lib/data';
+import { getVehicles, getMaintenanceTasks } from '@/lib/db-queries';
 import { Truck, Wrench, AlertTriangle, Building } from 'lucide-react';
 
-export function Overview() {
-  const totalVehicles = mockVehicles.length;
-  const operationalVehicles = mockVehicles.filter(v => v.status === 'Operational').length;
-  const overdueTasks = mockMaintenanceTasks.filter(t => t.status === 'Overdue').length;
-  const totalSites = new Set(mockVehicles.map(v => v.site)).size;
+export async function Overview() {
+  const vehicles = await getVehicles();
+  const tasks = await getMaintenanceTasks();
+  
+  const totalVehicles = vehicles.length;
+  const operationalVehicles = vehicles.filter(v => v.status === 'Operational').length;
+  const overdueTasks = tasks.filter(t => t.status === 'Overdue').length;
+  const totalSites = new Set(vehicles.map(v => v.site)).size;
 
   const stats = [
     { title: 'Vehículos Totales', value: totalVehicles, icon: Truck, color: 'text-primary' },

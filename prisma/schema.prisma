@@ -1,0 +1,370 @@
+// Prisma Schema para ControlSafe MySQL
+// Generador y configuración de base de datos
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String      @id @db.VarChar(50)
+  name       String      @db.VarChar(255)
+  email      String      @unique @db.VarChar(255)
+  phone      String?     @db.VarChar(50) // Celular
+  role       UserRole
+  canDrive   Boolean     @default(false) @map("can_drive") // Habilitado para conducir
+  companyId  String?     @map("company_id") @db.VarChar(50)
+  projectId  String?     @map("project_id") @db.VarChar(50) // Proyecto al que pertenece
+  avatarUrl  String?      @map("avatar_url") @db.VarChar(500)
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  company    Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  project    Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  vehicles   UserVehicle[]
+
+  @@map("users")
+  @@index([email])
+  @@index([role])
+  @@index([companyId])
+  @@index([projectId])
+}
+
+enum UserRole {
+  Administrator
+  Supervisor
+  Technician
+  Driver
+}
+
+
+model Vehicle {
+  id             String        @id @db.VarChar(50)
+  patent         String?       @db.VarChar(50)
+  name           String        @db.VarChar(255)
+  type           VehicleType
+  brand          String?       @db.VarChar(255)
+  model          String?       @db.VarChar(255)
+  year           Int?          @db.SmallInt
+  status         VehicleStatus @default(Operational)
+  mileage        Int           @default(0) @map("mileage")
+  operatingHours Int           @default(0) @map("operating_hours")
+  site           String        @db.VarChar(255) // Mantener para compatibilidad
+  siteId         String?       @map("site_id") @db.VarChar(50)
+  companyId      String?       @map("company_id") @db.VarChar(50)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  siteRelation   Site?         @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  maintenanceTasks  MaintenanceTask[]
+  torqueRecords     TorqueRecord[]
+  maintenanceRecords MaintenanceRecord[]
+  interventions     Intervention[]
+  assignedPrograms  VehicleMaintenanceProgram[]
+  drivers        UserVehicle[]
+
+  @@map("vehicles")
+  @@index([status])
+  @@index([type])
+  @@index([site])
+  @@index([siteId])
+  @@index([companyId])
+  @@index([patent])
+}
+
+enum VehicleType {
+  Excavator
+  HaulTruck @map("Haul Truck")
+  Dozer
+  Loader
+  Camioneta
+}
+
+enum VehicleStatus {
+  Operational
+  Maintenance
+  OutOfService @map("Out of Service")
+}
+
+model MaintenanceTask {
+  id        String            @id @db.VarChar(50)
+  vehicleId String            @map("vehicle_id") @db.VarChar(50)
+  task      String            @db.Text
+  dueDate   DateTime          @map("due_date")
+  status    MaintenanceStatus @default(Scheduled)
+  priority  TaskPriority      @default(Medium)
+  assignee  String?           @db.VarChar(255)
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("maintenance_tasks")
+  @@index([vehicleId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([priority])
+}
+
+enum MaintenanceStatus {
+  Scheduled
+  InProgress @map("In Progress")
+  Completed
+  Overdue
+}
+
+enum TaskPriority {
+  High
+  Medium
+  Low
+}
+
+model TorqueRecord {
+  id            String        @id @db.VarChar(50)
+  vehicleId     String        @map("vehicle_id") @db.VarChar(50)
+  component     String        @db.VarChar(255)
+  requiredTorque Decimal      @map("required_torque") @db.Decimal(10, 2)
+  appliedTorque Decimal      @map("applied_torque") @db.Decimal(10, 2)
+  technician    String        @db.VarChar(255)
+  tool          String        @db.VarChar(255)
+  date          DateTime
+  status        TorqueStatus
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("torque_records")
+  @@index([vehicleId])
+  @@index([date])
+  @@index([status])
+}
+
+enum TorqueStatus {
+  OK
+  NOK
+}
+
+model MaintenanceRecord {
+  recordId       String                    @id @map("record_id") @db.VarChar(50)
+  vehicleId      String                    @map("vehicle_id") @db.VarChar(50)
+  date           DateTime
+  description    String                    @db.Text
+  technician     String                    @db.VarChar(255)
+  operatingHours Int                       @map("operating_hours")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+
+  vehicle Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  parts   MaintenanceRecordPart[]
+
+  @@map("maintenance_records")
+  @@index([vehicleId])
+  @@index([date])
+}
+
+model MaintenanceRecordPart {
+  id        Int      @id @default(autoincrement())
+  recordId  String   @map("record_id") @db.VarChar(50)
+  partName  String   @map("part_name") @db.VarChar(255)
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  record MaintenanceRecord @relation(fields: [recordId], references: [recordId], onDelete: Cascade)
+
+  @@map("maintenance_record_parts")
+  @@index([recordId])
+}
+
+model Company {
+  id          String      @id @db.VarChar(50)
+  name        String      @db.VarChar(255)
+  type        CompanyType
+  country     String      @default("Chile") @db.VarChar(100)
+  rut         String?     @db.VarChar(50)
+  address     String?     @db.Text
+  phone       String?     @db.VarChar(50)
+  email       String?     @db.VarChar(255)
+  contactPerson String?   @map("contact_person") @db.VarChar(255)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  sites       Site[]
+  vehicles    Vehicle[]
+  projects    Project[]   @relation("ClientProjects")
+  subcontractorProjects ProjectSubcontractor[]
+  users       User[]
+
+  @@map("companies")
+  @@index([name])
+}
+
+enum CompanyType {
+  Mandante
+  Subcontratista
+}
+
+model Region {
+  id        String   @id @db.VarChar(50)
+  name      String   @db.VarChar(255)
+  code      String?  @db.VarChar(50)
+  country   String   @default("Chile") @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sites Site[]
+
+  @@map("regions")
+  @@index([name])
+}
+
+model Site {
+  id          String        @id @db.VarChar(50)
+  name        String        @db.VarChar(255)
+  regionId    String?       @map("region_id") @db.VarChar(50)
+  companyId   String?       @map("company_id") @db.VarChar(50)
+  address     String?       @db.Text
+  coordinates String?       @db.VarChar(255)
+  status      SiteStatus    @default(Active)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  region  Region?   @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  vehicles Vehicle[]
+
+  @@map("sites")
+  @@index([name])
+  @@index([status])
+  @@index([regionId])
+  @@index([companyId])
+}
+
+enum SiteStatus {
+  Active
+  Inactive
+  Closed
+}
+
+// ============================================
+// Modelos basados en estructura Firebase
+// ============================================
+
+model Project {
+  id              String   @id @db.VarChar(50)
+  name            String   @db.VarChar(255)
+  region          String?  @db.VarChar(255)
+  clientCompanyId String   @map("client_company_id") @db.VarChar(50)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  clientCompany   Company  @relation("ClientProjects", fields: [clientCompanyId], references: [id], onDelete: Cascade)
+  subcontractors  ProjectSubcontractor[]
+  users           User[]   // Usuarios asignados al proyecto
+
+  @@map("projects")
+  @@index([name])
+  @@index([clientCompanyId])
+}
+
+model ProjectSubcontractor {
+  id        String   @id @db.VarChar(50)
+  projectId String   @map("project_id") @db.VarChar(50)
+  companyId String   @map("company_id") @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("project_subcontractors")
+  @@unique([projectId, companyId])
+  @@index([projectId])
+  @@index([companyId])
+}
+
+model MaintenanceProgram {
+  id                    String   @id @db.VarChar(50)
+  name                  String   @db.VarChar(255)
+  description           String?  @db.Text
+  applicableVehicleType String?  @map("applicable_vehicle_type") @db.VarChar(50) // 'Todos los tipos', 'Camioneta', 'Vehículo Liviano', 'Camión', 'Maquinaria Pesada'
+  frequencyValue        Int      @map("frequency_value") @default(0)
+  frequencyUnit         String   @map("frequency_unit") @db.VarChar(50) // 'Horas de Operación', 'Kilómetros', 'Días', 'Semanas', 'Meses', 'Años'
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  tasks                 MaintenanceProgramTask[]
+  assignedVehicles      VehicleMaintenanceProgram[]
+
+  @@map("maintenance_programs")
+  @@index([name])
+  @@index([applicableVehicleType])
+}
+
+model MaintenanceProgramTask {
+  id                String   @id @db.VarChar(50)
+  programId         String   @map("program_id") @db.VarChar(50)
+  task              String   @db.Text
+  order             Int      @default(0)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  program           MaintenanceProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@map("maintenance_program_tasks")
+  @@index([programId])
+  @@index([order])
+}
+
+model VehicleMaintenanceProgram {
+  id                String   @id @db.VarChar(50)
+  vehicleId         String   @map("vehicle_id") @db.VarChar(50)
+  programId         String   @map("program_id") @db.VarChar(50)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  vehicle           Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  program           MaintenanceProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_maintenance_programs")
+  @@unique([vehicleId, programId])
+  @@index([vehicleId])
+  @@index([programId])
+}
+
+model Intervention {
+  id            String   @id @db.VarChar(50)
+  vehicleId     String   @map("vehicle_id") @db.VarChar(50)
+  task          String   @db.Text
+  date          DateTime
+  technician    String   @db.VarChar(255)
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("interventions")
+  @@index([vehicleId])
+  @@index([date])
+}
+
+// ============================================
+// Relación Usuario-Vehículo (Chofer-Vehículo)
+// ============================================
+model UserVehicle {
+  id        String   @id @db.VarChar(50)
+  userId    String   @map("user_id") @db.VarChar(50)
+  vehicleId String   @map("vehicle_id") @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("user_vehicles")
+  @@unique([userId, vehicleId])
+  @@index([userId])
+  @@index([vehicleId])
+}
