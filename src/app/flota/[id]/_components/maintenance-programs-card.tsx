@@ -15,11 +15,11 @@ import { X, Plus, Loader } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import {
-  getAllMaintenancePrograms,
   assignMaintenanceProgram,
   removeMaintenanceProgram,
   getVehicleById,
 } from '../../actions';
+import { getMaintenancePrograms } from '@/app/mantenimiento/actions';
 
 type MaintenanceProgram = {
   id: string;
@@ -63,7 +63,7 @@ export function MaintenanceProgramsCard({
     setLoading(true);
     try {
       const [programs, vehicle] = await Promise.all([
-        getAllMaintenancePrograms(),
+        getMaintenancePrograms(),
         getVehicleById(vehicleId),
       ]);
 
@@ -94,19 +94,31 @@ export function MaintenanceProgramsCard({
     }
 
     startTransition(async () => {
+      console.log('[Asignar Programa] Iniciando asignación:', {
+        vehicleId,
+        programId: selectedProgramId,
+      });
+      
       const result = await assignMaintenanceProgram(vehicleId, selectedProgramId);
+      
+      console.log('[Asignar Programa] Resultado:', result);
+      
       if (result.success) {
         toast({
           title: 'Programa asignado',
           description: 'El programa de mantenimiento ha sido asignado correctamente.',
         });
         setSelectedProgramId('');
-        loadData();
-        router.refresh();
+        // Recargar datos después de un breve delay para asegurar que la DB se actualizó
+        setTimeout(() => {
+          loadData();
+          router.refresh();
+        }, 500);
       } else {
+        console.error('[Asignar Programa] Error:', result.error);
         toast({
-          title: 'Error',
-          description: result.error || 'No se pudo asignar el programa.',
+          title: 'Error al asignar programa',
+          description: result.error || 'No se pudo asignar el programa. Revisa la consola para más detalles.',
           variant: 'destructive',
         });
       }

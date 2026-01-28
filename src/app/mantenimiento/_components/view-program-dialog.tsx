@@ -18,6 +18,7 @@ type MaintenanceProgram = {
   applicableVehicleType?: string;
   frequencyValue: number;
   frequencyUnit: string;
+  useBusinessDays?: boolean;
 };
 
 export function ViewProgramDialog({
@@ -85,9 +86,16 @@ export function ViewProgramDialog({
               <Clock className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">Frecuencia</span>
             </div>
-            <Badge variant="secondary" className="text-sm">
-              {formatFrequency(program.frequencyValue, program.frequencyUnit)}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-sm">
+                {formatFrequency(program.frequencyValue, program.frequencyUnit)}
+              </Badge>
+              {program.useBusinessDays && (program.frequencyUnit === 'Días' || program.frequencyUnit === 'Semanas') && (
+                <Badge variant="outline" className="text-xs">
+                  Solo días hábiles (L-V)
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>

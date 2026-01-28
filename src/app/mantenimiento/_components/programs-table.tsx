@@ -18,6 +18,7 @@ type MaintenanceProgram = {
   applicableVehicleType?: string;
   frequencyValue: number;
   frequencyUnit: string;
+  useBusinessDays?: boolean;
 };
 
 export function ProgramsTable({ programs }: { programs: MaintenanceProgram[] }) {
@@ -62,9 +63,16 @@ export function ProgramsTable({ programs }: { programs: MaintenanceProgram[] }) 
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant="secondary">
-                  {formatFrequency(program.frequencyValue, program.frequencyUnit)}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">
+                    {formatFrequency(program.frequencyValue, program.frequencyUnit)}
+                  </Badge>
+                  {program.useBusinessDays && (program.frequencyUnit === 'Días' || program.frequencyUnit === 'Semanas') && (
+                    <Badge variant="outline" className="text-xs">
+                      Solo días hábiles
+                    </Badge>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="text-right">
                 <ProgramActions program={program} />

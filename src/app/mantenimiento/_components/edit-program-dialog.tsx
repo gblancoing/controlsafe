@@ -23,6 +23,7 @@ import {
 import { Loader } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import { updateMaintenanceProgram } from '../actions';
 import { useRouter } from 'next/navigation';
 
@@ -33,6 +34,7 @@ type MaintenanceProgram = {
   applicableVehicleType?: string;
   frequencyValue: number;
   frequencyUnit: string;
+  useBusinessDays?: boolean;
 };
 
 export function EditProgramDialog({
@@ -49,6 +51,7 @@ export function EditProgramDialog({
   const [error, setError] = useState<string | null>(null);
   const [selectedVehicleType, setSelectedVehicleType] = useState<string>(program.applicableVehicleType || '');
   const [selectedUnit, setSelectedUnit] = useState<string>(program.frequencyUnit);
+  const [useBusinessDays, setUseBusinessDays] = useState<boolean>(program.useBusinessDays || false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -56,6 +59,7 @@ export function EditProgramDialog({
       setError(null);
       setSelectedVehicleType(program.applicableVehicleType || '');
       setSelectedUnit(program.frequencyUnit);
+      setUseBusinessDays(program.useBusinessDays || false);
     }
   }, [open, program]);
 
@@ -93,6 +97,7 @@ export function EditProgramDialog({
         applicableVehicleType: applicableVehicleType as 'Todos los tipos' | 'Camioneta' | 'Vehículo Liviano' | 'Camión' | 'Maquinaria Pesada' | undefined,
         frequencyValue,
         frequencyUnit: selectedUnit as 'Horas de Operación' | 'Kilómetros' | 'Días' | 'Semanas' | 'Meses' | 'Años',
+        useBusinessDays,
       });
 
       if (result.error) {
@@ -210,6 +215,25 @@ export function EditProgramDialog({
                 </SelectContent>
               </Select>
             </div>
+            {/* Configuración de Días Hábiles - Solo visible si la unidad es Días o Semanas */}
+            {(selectedUnit === 'Días' || selectedUnit === 'Semanas') && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Configuración</Label>
+                <div className="col-span-3 flex items-center space-x-2 p-3 border rounded-lg bg-muted/50">
+                  <Checkbox
+                    id="useBusinessDays"
+                    checked={useBusinessDays}
+                    onCheckedChange={(checked) => setUseBusinessDays(checked === true)}
+                  />
+                  <Label
+                    htmlFor="useBusinessDays"
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    Solo días hábiles (Lunes a Viernes)
+                  </Label>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button

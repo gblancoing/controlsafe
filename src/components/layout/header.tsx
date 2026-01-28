@@ -2,21 +2,14 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Bell, Search } from 'lucide-react';
-import { Input } from '../ui/input';
+import { Bell } from 'lucide-react';
 
 export function Header() {
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
-      <SidebarTrigger className="md:hidden" />
+      <SidebarTrigger />
       <div className="flex-1">
         <h1 className="text-lg font-semibold md:text-2xl">Panel de Control</h1>
-      </div>
-      <div className="hidden md:flex flex-1 items-center gap-4">
-        <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar vehículos, tareas..." className="pl-10" />
-        </div>
       </div>
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" className="rounded-full">

@@ -19,6 +19,7 @@
 
 # production
 /build
+*.zip
 
 # misc
 .DS_Store
@@ -39,6 +40,8 @@ next-env.d.ts
 
 .genkit/*
 .env*
+!.env.example
+!.env.production.example
 
 # firebase
 firebase-debug.log

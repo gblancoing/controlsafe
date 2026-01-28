@@ -22,13 +22,13 @@ export async function AppSidebar() {
     const footerUser = users[0] || currentUser;
 
     return (
-      <Sidebar>
+      <Sidebar collapsible="icon">
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
               <div className="flex items-center justify-center size-10 rounded-lg bg-primary text-primary-foreground">
                   <Truck className="size-6" />
               </div>
-              <h1 className="text-xl font-semibold font-headline text-primary">
+              <h1 className="text-xl font-semibold font-headline text-primary group-data-[collapsible=icon]:hidden">
                 ControlSafe
               </h1>
           </div>
@@ -51,13 +51,13 @@ export async function AppSidebar() {
     };
 
     return (
-      <Sidebar>
+      <Sidebar collapsible="icon">
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
               <div className="flex items-center justify-center size-10 rounded-lg bg-primary text-primary-foreground">
                   <Truck className="size-6" />
               </div>
-              <h1 className="text-xl font-semibold font-headline text-primary">
+              <h1 className="text-xl font-semibold font-headline text-primary group-data-[collapsible=icon]:hidden">
                 ControlSafe
               </h1>
           </div>

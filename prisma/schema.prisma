@@ -2,7 +2,8 @@
 // Generador y configuración de base de datos
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.1.x"]
 }
 
 datasource db {
@@ -17,6 +18,7 @@ model User {
   phone      String?     @db.VarChar(50) // Celular
   role       UserRole
   canDrive   Boolean     @default(false) @map("can_drive") // Habilitado para conducir
+  isActive   Boolean     @default(true) @map("is_active") // Usuario activo/inactivo
   companyId  String?     @map("company_id") @db.VarChar(50)
   projectId  String?     @map("project_id") @db.VarChar(50) // Proyecto al que pertenece
   avatarUrl  String?      @map("avatar_url") @db.VarChar(500)
@@ -26,12 +28,36 @@ model User {
   company    Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
   project    Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
   vehicles   UserVehicle[]
+  reviewedControls PreventiveControlReview[] @relation("Reviewer")
+  drivenVehicles    PreventiveControlReview[] @relation("VehicleDriver")
+  passwordResetTokens PasswordResetToken[]
+  sentBulkMessages BulkMessage[]
 
   @@map("users")
   @@index([email])
   @@index([role])
   @@index([companyId])
   @@index([projectId])
+  @@index([isActive])
+}
+
+// Modelo para tokens de recuperación de contraseña
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  token     String   @unique @db.VarChar(255)
+  userId    String   @map("user_id") @db.VarChar(50)
+  email     String   @db.VarChar(255)
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+  @@index([token])
+  @@index([userId])
+  @@index([email])
+  @@index([expiresAt])
 }
 
 enum UserRole {
@@ -43,38 +69,63 @@ enum UserRole {
 
 
 model Vehicle {
-  id             String        @id @db.VarChar(50)
-  patent         String?       @db.VarChar(50)
-  name           String        @db.VarChar(255)
-  type           VehicleType
-  brand          String?       @db.VarChar(255)
-  model          String?       @db.VarChar(255)
-  year           Int?          @db.SmallInt
-  status         VehicleStatus @default(Operational)
-  mileage        Int           @default(0) @map("mileage")
-  operatingHours Int           @default(0) @map("operating_hours")
-  site           String        @db.VarChar(255) // Mantener para compatibilidad
-  siteId         String?       @map("site_id") @db.VarChar(50)
-  companyId      String?       @map("company_id") @db.VarChar(50)
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  id                        String        @id @db.VarChar(50)
+  patent                    String?       @db.VarChar(50)
+  name                      String        @db.VarChar(255)
+  type                      VehicleType   // Mantener para compatibilidad temporal
+  vehicleTypeId             String?       @map("vehicle_type_id") @db.VarChar(50)
+  brand                     String?       @db.VarChar(255)
+  model                     String?       @db.VarChar(255)
+  year                      Int?          @db.SmallInt
+  status                    VehicleStatus @default(Operational)
+  mileage                   Int           @default(0) @map("mileage")
+  operatingHours            Int           @default(0) @map("operating_hours")
+  site                      String        @db.VarChar(255) // Mantener para compatibilidad
+  siteId                    String?       @map("site_id") @db.VarChar(50)
+  companyId                 String?       @map("company_id") @db.VarChar(50)
+  isOperational             Boolean       @default(true) @map("is_operational")
+  technicalReviewDate       DateTime?     @map("technical_review_date")
+  technicalReviewExpiryDate DateTime?     @map("technical_review_expiry_date")
+  circulationPermitStatus   String?       @map("circulation_permit_status") @db.VarChar(50) // 'Vigente', 'Vencido', 'Pendiente'
+  createdAt                 DateTime      @default(now()) @map("created_at")
+  updatedAt                 DateTime      @updatedAt @map("updated_at")
 
   company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   siteRelation   Site?         @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  vehicleType    VehicleTypeModel? @relation(fields: [vehicleTypeId], references: [id], onDelete: SetNull)
   maintenanceTasks  MaintenanceTask[]
   torqueRecords     TorqueRecord[]
   maintenanceRecords MaintenanceRecord[]
   interventions     Intervention[]
   assignedPrograms  VehicleMaintenanceProgram[]
   drivers        UserVehicle[]
+  controlReviews    PreventiveControlReview[]
+  documents      VehicleDocument[]
 
   @@map("vehicles")
   @@index([status])
   @@index([type])
+  @@index([vehicleTypeId])
   @@index([site])
   @@index([siteId])
   @@index([companyId])
   @@index([patent])
+}
+
+model VehicleTypeModel {
+  id          String    @id @db.VarChar(50)
+  name        String    @unique @db.VarChar(255)
+  displayName String    @map("display_name") @db.VarChar(255)
+  description String?   @db.Text
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  vehicles    Vehicle[]
+
+  @@map("vehicle_types")
+  @@index([name])
+  @@index([isActive])
 }
 
 enum VehicleType {
@@ -89,6 +140,7 @@ enum VehicleStatus {
   Operational
   Maintenance
   OutOfService @map("Out of Service")
+  NotAllowedToOperate @map("Not Allowed to Operate") // No permitido para circular dentro del proyecto
 }
 
 model MaintenanceTask {
@@ -294,6 +346,7 @@ model MaintenanceProgram {
   applicableVehicleType String?  @map("applicable_vehicle_type") @db.VarChar(50) // 'Todos los tipos', 'Camioneta', 'Vehículo Liviano', 'Camión', 'Maquinaria Pesada'
   frequencyValue        Int      @map("frequency_value") @default(0)
   frequencyUnit         String   @map("frequency_unit") @db.VarChar(50) // 'Horas de Operación', 'Kilómetros', 'Días', 'Semanas', 'Meses', 'Años'
+  useBusinessDays       Boolean  @default(false) @map("use_business_days") // true = Solo días hábiles (L-V), false = Días corridos
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
@@ -313,6 +366,7 @@ model MaintenanceProgramTask {
   createdAt         DateTime @default(now()) @map("created_at")
 
   program           MaintenanceProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  reviewItems       ReviewChecklistItem[]
 
   @@map("maintenance_program_tasks")
   @@index([programId])
@@ -320,18 +374,24 @@ model MaintenanceProgramTask {
 }
 
 model VehicleMaintenanceProgram {
-  id                String   @id @db.VarChar(50)
-  vehicleId         String   @map("vehicle_id") @db.VarChar(50)
-  programId         String   @map("program_id") @db.VarChar(50)
-  createdAt         DateTime @default(now()) @map("created_at")
+  id                String    @id @db.VarChar(50)
+  vehicleId         String    @map("vehicle_id") @db.VarChar(50)
+  programId         String    @map("program_id") @db.VarChar(50)
+  lastResetDate     DateTime? @map("last_reset_date") // Última vez que se reseteó/completó
+  nextDueDate       DateTime? @map("next_due_date") // Próxima fecha de revisión calculada
+  scheduledTime     String?   @map("scheduled_time") @db.VarChar(10) // Hora programada (HH:mm)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   vehicle           Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   program           MaintenanceProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  reviews           PreventiveControlReview[]
 
   @@map("vehicle_maintenance_programs")
   @@unique([vehicleId, programId])
   @@index([vehicleId])
   @@index([programId])
+  @@index([nextDueDate])
 }
 
 model Intervention {
@@ -367,4 +427,134 @@ model UserVehicle {
   @@unique([userId, vehicleId])
   @@index([userId])
   @@index([vehicleId])
+}
+
+// ============================================
+// Revisiones de Controles Preventivos
+// ============================================
+
+model PreventiveControlReview {
+  id                    String   @id @db.VarChar(50)
+  vehicleMaintenanceProgramId String @map("vehicle_maintenance_program_id") @db.VarChar(50)
+  vehicleId            String   @map("vehicle_id") @db.VarChar(50)
+  driverId             String?  @map("driver_id") @db.VarChar(50) // Chofer asignado al vehículo
+  reviewedBy           String   @map("reviewed_by") @db.VarChar(50) // Usuario que realiza la revisión
+  reviewDate           DateTime @map("review_date") // Fecha y hora de la revisión
+  status               ReviewStatus
+  observations         String?  @db.Text // Observaciones generales
+  urgentRejectionReason String? @map("urgent_rejection_reason") @db.Text // Motivo si es rechazo urgente
+  requiredActions      String?  @map("required_actions") @db.Text // Acciones requeridas para volver a operativo
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  vehicleMaintenanceProgram VehicleMaintenanceProgram @relation(fields: [vehicleMaintenanceProgramId], references: [id], onDelete: Cascade)
+  vehicle                   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driver                    User? @relation("VehicleDriver", fields: [driverId], references: [id], onDelete: SetNull)
+  reviewer                  User @relation("Reviewer", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  checklistItems            ReviewChecklistItem[]
+  photos                    ReviewPhoto[]
+
+  @@map("preventive_control_reviews")
+  @@index([vehicleMaintenanceProgramId])
+  @@index([vehicleId])
+  @@index([reviewDate])
+  @@index([status])
+}
+
+enum ReviewStatus {
+  Approved
+  Rejected
+  UrgentRejected @map("Urgent Rejected")
+}
+
+model ReviewChecklistItem {
+  id                String   @id @db.VarChar(50)
+  reviewId          String   @map("review_id") @db.VarChar(50)
+  programTaskId     String?  @map("program_task_id") @db.VarChar(50) // Referencia a tarea del programa
+  item              String   @db.Text // Texto del item del checklist
+  checked           Boolean  @default(false) // Si está marcado como completado
+  notes             String?  @db.Text // Notas específicas del item
+  order             Int      @default(0)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  review            PreventiveControlReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  programTask       MaintenanceProgramTask? @relation(fields: [programTaskId], references: [id], onDelete: SetNull)
+
+  @@map("review_checklist_items")
+  @@index([reviewId])
+  @@index([order])
+}
+
+model ReviewPhoto {
+  id        String   @id @db.VarChar(50)
+  reviewId  String   @map("review_id") @db.VarChar(50)
+  url       String   @db.VarChar(500) // URL de la imagen (almacenada en servidor o cloud)
+  caption   String?  @db.VarChar(255) // Descripción opcional de la foto
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  review    PreventiveControlReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@map("review_photos")
+  @@index([reviewId])
+  @@index([order])
+}
+
+model VehicleDocument {
+  id          String   @id @db.VarChar(50)
+  vehicleId   String   @map("vehicle_id") @db.VarChar(50)
+  type        String   @db.VarChar(50) // 'photo', 'technical_review', 'circulation_permit', 'manufacturer_doc', 'other'
+  url         String   @db.VarChar(500)
+  caption     String?  @db.VarChar(255)
+  fileName    String?  @map("file_name") @db.VarChar(255)
+  fileSize    Int?     @map("file_size") // Tamaño en bytes
+  mimeType    String?  @map("mime_type") @db.VarChar(100)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_documents")
+  @@index([vehicleId])
+  @@index([type])
+  @@index([order])
+}
+
+// Modelo para políticas de notificación
+model NotificationPolicy {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  name        String   @unique @db.VarChar(255) // Ej: "Flota por vencer", "Mantenimiento preventivo"
+  description String?  @db.Text
+  enabled     Boolean  @default(true)
+  metricType  String   @map("metric_type") @db.VarChar(100) // Tipo de métrica: "maintenance_due", "document_expiry", etc.
+  daysBefore  Int      @default(7) @map("days_before") // Días antes del evento para notificar
+  emailTemplate String? @map("email_template") @db.Text // Plantilla de email
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_policies")
+  @@index([enabled])
+  @@index([metricType])
+}
+
+// Modelo para mensajes masivos
+model BulkMessage {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  subject     String   @db.VarChar(255)
+  message     String   @db.Text
+  recipientType String @map("recipient_type") @db.VarChar(50) // "all", "companies", "users", "specific"
+  recipientIds String? @map("recipient_ids") @db.Text // JSON array de IDs (companies o users)
+  sentBy      String   @map("sent_by") @db.VarChar(50) // ID del usuario que envió
+  sentAt      DateTime @default(now()) @map("sent_at")
+  totalRecipients Int  @default(0) @map("total_recipients")
+  successCount Int     @default(0) @map("success_count")
+  errorCount   Int     @default(0) @map("error_count")
+
+  sender      User     @relation(fields: [sentBy], references: [id], onDelete: Cascade)
+
+  @@map("bulk_messages")
+  @@index([sentBy])
+  @@index([sentAt])
+  @@index([recipientType])
 }

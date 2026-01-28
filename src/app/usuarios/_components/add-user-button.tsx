@@ -27,6 +27,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { createUser, getAllCompanies, getAllProjects } from '../actions';
 import { useRouter } from 'next/navigation';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '@/lib/firebase/config';
 
 export function AddUserButton() {
   const router = useRouter();
@@ -59,8 +61,10 @@ export function AddUserButton() {
     const name = formData.get('name') as string;
     const email = formData.get('email') as string;
     const phone = formData.get('phone') as string;
+    const password = formData.get('password') as string;
     const selectedRole = formData.get('role') as string;
     const canDrive = formData.get('canDrive') === 'on';
+    const isActive = formData.get('isActive') === 'on';
     const companyId = formData.get('companyId') as string;
     const projectId = formData.get('projectId') as string;
 
@@ -80,12 +84,35 @@ export function AddUserButton() {
     const finalProjectId = projectId && projectId !== '__none__' ? projectId : undefined;
 
     startTransition(async () => {
+      // Primero crear el usuario en Firebase Authentication
+      try {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } catch (firebaseError: any) {
+        if (firebaseError?.code === 'auth/email-already-in-use') {
+          setError(`El email "${email}" ya está registrado en el sistema.`);
+          return;
+        } else if (firebaseError?.code === 'auth/weak-password') {
+          setError('La contraseña es muy débil. Use al menos 6 caracteres.');
+          return;
+        } else if (firebaseError?.code === 'auth/invalid-email') {
+          setError('El email proporcionado no es válido.');
+          return;
+        } else {
+          // Si Firebase no está configurado, continuar de todas formas
+          console.warn('Error al crear usuario en Firebase (puede que no esté configurado):', firebaseError);
+          // Continuar con la creación en la base de datos
+        }
+      }
+
+      // Luego crear el usuario en la base de datos
       const result = await createUser({
         name,
         email,
+        password,
         phone: phone || undefined,
         role: selectedRole as 'Administrator' | 'Supervisor' | 'Technician' | 'Driver',
         canDrive,
+        isActive,
         companyId: finalCompanyId,
         projectId: finalProjectId,
       });
@@ -165,6 +192,21 @@ export function AddUserButton() {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="password" className="text-right">
+                Contraseña
+              </Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                required
+                className="col-span-3"
+                placeholder="Mínimo 6 caracteres"
+                minLength={6}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="role" className="text-right">
                 Rol
               </Label>
@@ -193,6 +235,17 @@ export function AddUserButton() {
                 <Checkbox id="canDrive" name="canDrive" />
                 <Label htmlFor="canDrive" className="text-sm font-normal cursor-pointer">
                   El usuario está habilitado para conducir vehículos
+                </Label>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="isActive" className="text-right">
+                Estado del Usuario
+              </Label>
+              <div className="col-span-3 flex items-center space-x-2">
+                <Checkbox id="isActive" name="isActive" defaultChecked={true} />
+                <Label htmlFor="isActive" className="text-sm font-normal cursor-pointer">
+                  Usuario activo (puede acceder al sistema)
                 </Label>
               </div>
             </div>

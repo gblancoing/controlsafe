@@ -1,0 +1,63 @@
+---
+description: Configuración para desplegar Next.js + Node.js + Prisma en cPanel (Linux). Aplicar al crear o desplegar proyectos similares.
+alwaysApply: false
+globs: prisma/schema.prisma, next.config.ts, scripts/build-and-package.ps1, **/SOLUCION*.md
+---
+
+# Despliegue Next.js + Node.js + Prisma en cPanel (Linux)
+
+Usar esta configuración cuando se monte o despliegue un proyecto **Next.js** con **Prisma** y **Node.js** en **cPanel** (servidor Linux).
+
+## 1. Prisma en servidor Linux
+
+- En **`prisma/schema.prisma`** el generador debe incluir **binaryTargets** para Linux (Debian):
+  ```prisma
+  generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native", "debian-openssl-1.1.x"]
+  }
+  ```
+- Antes de generar el ZIP de producción: `npx prisma generate`.
+- Sin esto, en producción aparece: *Prisma Client could not locate Query Engine for "debian-openssl-1.1.x"*.
+
+## 2. Next.js standalone en cPanel
+
+- **`next.config.ts`**: `output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined`.
+- En cPanel, **Application startup file**: `.next/standalone/<nombreApp>/server.js` (no usar Run NPM Install si falla con nodevenv).
+- Crear el ZIP con **7-Zip** (PowerShell Compress-Archive puede omitir rutas largas de `node_modules`). Script de build debe:
+  - Copiar **todo** el contenido de `.next` (excepto `standalone` y `cache`) al `.next` dentro del standalone (BUILD_ID, routes-manifest.json, server/, static/, etc.).
+  - Copiar **`public/`** dentro de la carpeta standalone para que `/flota.jpg` y estáticos funcionen.
+  - Usar 7-Zip para el ZIP si está instalado (`C:\Program Files\7-Zip\7z.exe`).
+
+## 3. Permisos en el servidor
+
+- Tras extraer el ZIP: **carpetas 755** (Change Permissions → 755 → Recurse into subdirectories) en `.next`, `public`, `prisma`.
+- Si las carpetas quedan en 644, Node puede fallar y cuesta borrarlas después.
+
+## 4. Variables de entorno en cPanel
+
+- **NODE_ENV**: `production`.
+- **DATABASE_URL**: `mysql://usuario:contraseña@host:3306/nombre_bd` (MySQL del hosting).
+- **NEXT_PUBLIC_APP_URL**: URL pública de la app (p. ej. `https://midominio.com`).
+- Si hay emails: **SMTP_HOST**, **SMTP_PORT**, **SMTP_USER**, **SMTP_PASSWORD**, **SMTP_FROM**.
+- `NEXT_PUBLIC_*` se embeben en el build; para producción, tener `.env.production` con la URL correcta antes de `npm run build:prod:zip`.
+
+## 5. UI / componentes (evitar errores en producción)
+
+- **Radix Select**: `<SelectItem value="">` no está permitido. Usar un valor no vacío (p. ej. `value="__none__"` o `value="__no_types__"`) y `disabled` si aplica.
+- **Navegación**: Si "Panel de Control" debe ir al dashboard, enlazar a `/dashboard`, no a `/` (landing).
+- **Inputs de contraseña**: Añadir `autoComplete="current-password"` (login) o `autoComplete="new-password"` (registro/reset) para evitar avisos del navegador.
+
+## 6. Documentación en el proyecto
+
+- Mantener una **guía única de despliegue** (p. ej. `SOLUCION_DEFINITIVA_503.md` o `DESPLIEGUE_CPANEL.md`) con: pasos en orden, requisitos (7-Zip), permisos 755, variables de entorno, errores frecuentes y solución (Prisma binaryTargets, public en standalone, Select value, etc.).
+- Evitar múltiples documentos duplicados para el mismo flujo.
+
+## 7. Comandos típicos
+
+```powershell
+npx prisma generate
+npm run build:prod:zip
+```
+
+En el servidor: subir ZIP → extraer → permisos 755 en carpetas → Start Application en Node.js App.

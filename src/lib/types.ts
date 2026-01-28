@@ -14,11 +14,30 @@ export type Vehicle = {
   brand?: string;
   model?: string;
   year?: number;
-  status: 'Operational' | 'Maintenance' | 'Out of Service';
+  status: 'Operational' | 'Maintenance' | 'Out of Service' | 'Not Allowed to Operate';
   mileage: number;
   operatingHours: number;
   site: string;
   companyId?: string;
+  isOperational?: boolean;
+  technicalReviewDate?: Date;
+  technicalReviewExpiryDate?: Date;
+  circulationPermitStatus?: 'Vigente' | 'Vencido' | 'Pendiente';
+  documents?: VehicleDocument[];
+};
+
+export type VehicleDocument = {
+  id: string;
+  vehicleId: string;
+  type: 'photo' | 'technical_review' | 'circulation_permit' | 'manufacturer_doc' | 'other';
+  url: string;
+  caption?: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+  order: number;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type MaintenanceTask = {
@@ -82,6 +101,7 @@ export type MaintenanceProgram = {
   applicableVehicleType?: 'Todos los tipos' | 'Camioneta' | 'Vehículo Liviano' | 'Camión' | 'Maquinaria Pesada';
   frequencyValue: number;
   frequencyUnit: string; // 'Horas de Operación', 'Kilómetros', 'Días', 'Semanas', 'Meses', 'Años'
+  useBusinessDays?: boolean; // true = Solo días hábiles (L-V), false = Días corridos
   tasks: MaintenanceProgramTask[];
 };
 

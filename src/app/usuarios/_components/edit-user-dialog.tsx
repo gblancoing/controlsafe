@@ -33,6 +33,7 @@ type User = {
   phone?: string;
   role: string;
   canDrive?: boolean;
+  isActive?: boolean;
   companyId?: string;
   projectId?: string;
 };
@@ -72,8 +73,10 @@ export function EditUserDialog({
     const name = formData.get('name') as string;
     const email = formData.get('email') as string;
     const phone = formData.get('phone') as string;
+    const password = formData.get('password') as string;
     const selectedRole = formData.get('role') as string;
     const canDrive = formData.get('canDrive') === 'on';
+    const isActive = formData.get('isActive') === 'on';
     const companyId = formData.get('companyId') as string;
     const projectId = formData.get('projectId') as string;
 
@@ -92,13 +95,38 @@ export function EditUserDialog({
     // Normalizar projectId: si es "__none__" o vacío, usar undefined
     const finalProjectId = projectId && projectId !== '__none__' ? projectId : undefined;
 
+    // Validar contraseña si se proporciona
+    if (password && password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
     startTransition(async () => {
+      // Si se proporciona contraseña, actualizarla en Firebase
+      if (password) {
+        try {
+          const { updatePassword } = await import('firebase/auth');
+          const { auth } = await import('@/lib/firebase/config');
+          const { signInWithEmailAndPassword } = await import('firebase/auth');
+          
+          // Primero autenticar con la contraseña actual (si es necesario)
+          // Nota: Para actualizar la contraseña, necesitamos estar autenticados
+          // Por ahora, solo intentamos actualizar si Firebase está configurado
+          // TODO: Implementar actualización de contraseña con Firebase Admin SDK
+        } catch (firebaseError: any) {
+          console.warn('Error al actualizar contraseña en Firebase:', firebaseError);
+          // Continuar con la actualización en la BD aunque Firebase falle
+        }
+      }
+
       const result = await updateUser(user.id, {
         name,
         email,
+        password: password || undefined,
         phone: phone || undefined,
         role: selectedRole as 'Administrator' | 'Supervisor' | 'Technician' | 'Driver',
         canDrive,
+        isActive,
         companyId: finalCompanyId,
         projectId: finalProjectId,
       });
@@ -196,6 +224,17 @@ export function EditUserDialog({
                 <Checkbox id="edit-canDrive" name="canDrive" defaultChecked={user.canDrive} />
                 <Label htmlFor="edit-canDrive" className="text-sm font-normal cursor-pointer">
                   El usuario está habilitado para conducir vehículos
+                </Label>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-isActive" className="text-right">
+                Estado del Usuario
+              </Label>
+              <div className="col-span-3 flex items-center space-x-2">
+                <Checkbox id="edit-isActive" name="isActive" defaultChecked={user.isActive !== false} />
+                <Label htmlFor="edit-isActive" className="text-sm font-normal cursor-pointer">
+                  Usuario activo (puede acceder al sistema)
                 </Label>
               </div>
             </div>

@@ -8,6 +8,7 @@ import { getVehicleById } from '../../actions';
 import { Truck, Calendar, Wrench, Building2, ShieldCheck, Clock } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { VehicleFichaQR } from './_components/vehicle-ficha-qr';
+import { ReviewHistoryCard } from './_components/review-history-card';
 import { getVehicleTypeLabel, getVehicleStatusLabel, getVehicleStatusVariant } from '@/lib/vehicle-utils';
 
 export default async function VehicleFichaPage({
@@ -30,6 +31,8 @@ export default async function VehicleFichaPage({
         return 'secondary';
       case 'Out of Service':
         return 'destructive';
+      case 'Not Allowed to Operate':
+        return 'destructive';
       default:
         return 'outline';
     }
@@ -43,6 +46,8 @@ export default async function VehicleFichaPage({
         return 'En Mantenimiento';
       case 'Out of Service':
         return 'Fuera de Servicio';
+      case 'Not Allowed to Operate':
+        return 'Inoperativo';
       default:
         return status;
     }
@@ -180,6 +185,9 @@ export default async function VehicleFichaPage({
                 </CardContent>
               </Card>
             )}
+
+            {/* Historial de Revisiones */}
+            <ReviewHistoryCard vehicleId={id} />
 
             {/* Footer */}
             <div className="text-center text-sm text-muted-foreground py-4">

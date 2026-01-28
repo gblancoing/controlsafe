@@ -11,6 +11,7 @@ const createMaintenanceProgramSchema = z.object({
   applicableVehicleType: z.enum(['Todos los tipos', 'Camioneta', 'Vehículo Liviano', 'Camión', 'Maquinaria Pesada']).optional(),
   frequencyValue: z.number().int().min(1, 'La frecuencia debe ser mayor a 0'),
   frequencyUnit: z.enum(['Horas de Operación', 'Kilómetros', 'Días', 'Semanas', 'Meses', 'Años']),
+  useBusinessDays: z.boolean().optional().default(false), // Solo días hábiles (L-V) o días corridos
 });
 
 // Obtener todos los programas de mantenimiento
@@ -32,6 +33,7 @@ export async function getMaintenancePrograms() {
       applicableVehicleType: p.applicableVehicleType || undefined,
       frequencyValue: p.frequencyValue,
       frequencyUnit: p.frequencyUnit,
+      useBusinessDays: (p as any).useBusinessDays ?? false,
       tasks: p.tasks.map((t) => ({
         id: t.id,
         task: t.task,
@@ -65,6 +67,7 @@ export async function getMaintenanceProgramById(id: string) {
       applicableVehicleType: program.applicableVehicleType || undefined,
       frequencyValue: program.frequencyValue,
       frequencyUnit: program.frequencyUnit,
+      useBusinessDays: (program as any).useBusinessDays ?? false,
       tasks: program.tasks.map((t) => ({
         id: t.id,
         task: t.task,
@@ -84,6 +87,7 @@ export async function createMaintenanceProgram(input: {
   applicableVehicleType?: 'Todos los tipos' | 'Camioneta' | 'Vehículo Liviano' | 'Camión' | 'Maquinaria Pesada';
   frequencyValue: number;
   frequencyUnit: 'Horas de Operación' | 'Kilómetros' | 'Días' | 'Semanas' | 'Meses' | 'Años';
+  useBusinessDays?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const validated = createMaintenanceProgramSchema.parse(input);
@@ -109,6 +113,7 @@ export async function createMaintenanceProgram(input: {
         applicableVehicleType: validated.applicableVehicleType || null,
         frequencyValue: validated.frequencyValue,
         frequencyUnit: validated.frequencyUnit,
+        useBusinessDays: validated.useBusinessDays || false,
       },
     });
 
@@ -132,6 +137,7 @@ export async function updateMaintenanceProgram(
     applicableVehicleType?: 'Todos los tipos' | 'Camioneta' | 'Vehículo Liviano' | 'Camión' | 'Maquinaria Pesada';
     frequencyValue: number;
     frequencyUnit: 'Horas de Operación' | 'Kilómetros' | 'Días' | 'Semanas' | 'Meses' | 'Años';
+    useBusinessDays?: boolean;
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -149,7 +155,7 @@ export async function updateMaintenanceProgram(
       return { success: false, error: `Ya existe otro programa con el nombre "${validated.name}".` };
     }
 
-    await prisma.maintenanceProgram.update({
+    await (prisma.maintenanceProgram.update as any)({
       where: { id },
       data: {
         name: validated.name,
@@ -157,6 +163,7 @@ export async function updateMaintenanceProgram(
         applicableVehicleType: validated.applicableVehicleType || null,
         frequencyValue: validated.frequencyValue,
         frequencyUnit: validated.frequencyUnit,
+        useBusinessDays: validated.useBusinessDays || false,
       },
     });
 

@@ -21,12 +21,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PlusCircle, Loader } from 'lucide-react';
+import { PlusCircle, Loader, Upload, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import { createVehicle, getAllCompanies, getDriversByCompany } from '../actions';
+import { getActiveVehicleTypes } from '../tipos/actions';
 import { useRouter } from 'next/navigation';
 import type { Vehicle } from '@/lib/types';
+import { useEffect } from 'react';
 
 export function AddVehicleButton() {
   const router = useRouter();
@@ -35,9 +38,15 @@ export function AddVehicleButton() {
   const [error, setError] = useState<string | null>(null);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [drivers, setDrivers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [vehicleTypes, setVehicleTypes] = useState<{ id: string; name: string; displayName: string }[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   const [selectedDriverId, setSelectedDriverId] = useState<string>('');
   const [selectedType, setSelectedType] = useState<string>('');
+  const [isOperational, setIsOperational] = useState<boolean>(true);
+  const [technicalReviewDate, setTechnicalReviewDate] = useState<string>('');
+  const [technicalReviewExpiryDate, setTechnicalReviewExpiryDate] = useState<string>('');
+  const [circulationPermitStatus, setCirculationPermitStatus] = useState<string>('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const { toast } = useToast();
 
   // Cargar empresas al abrir el diálogo
@@ -48,6 +57,11 @@ export function AddVehicleButton() {
       setSelectedCompanyId('');
       setSelectedDriverId('');
       setSelectedType('');
+      setIsOperational(true);
+      setTechnicalReviewDate('');
+      setTechnicalReviewExpiryDate('');
+      setCirculationPermitStatus('');
+      setSelectedFiles([]);
       setDrivers([]);
       const companiesList = await getAllCompanies();
       setCompanies(companiesList);
@@ -76,9 +90,10 @@ export function AddVehicleButton() {
       return;
     }
 
-    const validTypes = ['Excavator', 'Haul Truck', 'Dozer', 'Loader', 'Camioneta'];
-    if (!validTypes.includes(selectedType)) {
-      setError(`Tipo de vehículo inválido: "${selectedType}". Por favor seleccione un tipo válido.`);
+    // Validar que el tipo seleccionado existe en la lista de tipos activos
+    const selectedTypeObj = vehicleTypes.find(t => t.id === selectedType);
+    if (!selectedTypeObj) {
+      setError(`Tipo de vehículo inválido. Por favor seleccione un tipo válido.`);
       return;
     }
 
@@ -101,29 +116,40 @@ export function AddVehicleButton() {
     const mileage = mileageStr ? parseInt(mileageStr, 10) : 0;
 
     startTransition(async () => {
-      // Usar selectedType directamente para evitar problemas de scope
-      const finalType = selectedType as Vehicle['type'];
+      // Validar fechas de revisión técnica
+      let techReviewDate: Date | undefined;
+      let techReviewExpiryDate: Date | undefined;
+      let finalIsOperational = isOperational;
       
-      // Validar nuevamente antes de enviar
-      if (!finalType || finalType.trim() === '') {
-        setError('El tipo de vehículo es obligatorio. Por favor seleccione un tipo.');
+      if (technicalReviewDate) {
+        techReviewDate = new Date(technicalReviewDate);
+      }
+      if (technicalReviewExpiryDate) {
+        techReviewExpiryDate = new Date(technicalReviewExpiryDate);
+        // Si la fecha de vencimiento está vencida, el vehículo debe estar inoperativo
+        if (techReviewExpiryDate < new Date()) {
+          finalIsOperational = false;
+        }
+      }
+      // Obtener el tipo seleccionado
+      const selectedTypeObj = vehicleTypes.find(t => t.id === selectedType);
+      if (!selectedTypeObj) {
+        setError(`Tipo de vehículo inválido. Por favor seleccione un tipo válido.`);
         return;
       }
 
-      // Validar que el tipo sea uno de los valores válidos
-      const validTypes: Vehicle['type'][] = ['Excavator', 'Haul Truck', 'Dozer', 'Loader', 'Camioneta'];
-      if (!validTypes.includes(finalType)) {
-        setError(`Tipo de vehículo inválido: "${finalType}". Por favor seleccione un tipo válido.`);
-        return;
-      }
+      // Usar el name del tipo para compatibilidad con el enum
+      const finalType = selectedTypeObj.name as Vehicle['type'];
+      const finalVehicleTypeId = selectedType;
 
       // Debug: verificar que el tipo se está pasando correctamente
       console.log('Enviando vehículo con tipo:', finalType);
-      console.log('selectedType estado:', selectedType);
+      console.log('vehicleTypeId:', finalVehicleTypeId);
       console.log('Datos completos:', {
         patent,
         name: vehicleName,
         type: finalType,
+        vehicleTypeId: finalVehicleTypeId,
         brand,
         model,
         year,
@@ -136,12 +162,17 @@ export function AddVehicleButton() {
         patent: patent || undefined,
         name: vehicleName,
         type: finalType,
+        vehicleTypeId: finalVehicleTypeId,
         brand: brand || undefined,
         model: model || undefined,
         year,
         mileage,
         companyId: companyId || undefined,
         driverId: driverId || undefined,
+        isOperational: finalIsOperational,
+        technicalReviewDate: techReviewDate,
+        technicalReviewExpiryDate: techReviewExpiryDate,
+        circulationPermitStatus: circulationPermitStatus as 'Vigente' | 'Vencido' | 'Pendiente' | undefined,
       });
       if (result.error) {
         setError(result.error);
@@ -257,11 +288,15 @@ export function AddVehicleButton() {
                   <SelectValue placeholder="Seleccione un tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Excavator">Excavator</SelectItem>
-                  <SelectItem value="Haul Truck">Haul Truck</SelectItem>
-                  <SelectItem value="Dozer">Dozer</SelectItem>
-                  <SelectItem value="Loader">Loader</SelectItem>
-                  <SelectItem value="Camioneta">Camioneta</SelectItem>
+                  {vehicleTypes.length === 0 ? (
+                    <SelectItem value="__no_types__" disabled>No hay tipos disponibles</SelectItem>
+                  ) : (
+                    vehicleTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.displayName}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -312,6 +347,122 @@ export function AddVehicleButton() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            {/* Estado Operativo/Inoperativo */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Estado</Label>
+              <div className="col-span-3 flex items-center space-x-2 p-3 border rounded-lg bg-muted/50">
+                <Checkbox
+                  id="isOperational"
+                  checked={isOperational}
+                  onCheckedChange={(checked) => setIsOperational(checked === true)}
+                />
+                <Label
+                  htmlFor="isOperational"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Vehículo Operativo
+                </Label>
+              </div>
+            </div>
+            {/* Revisión Técnica */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="technicalReviewDate" className="text-right">
+                Fecha Revisión Técnica
+              </Label>
+              <Input
+                id="technicalReviewDate"
+                name="technicalReviewDate"
+                type="date"
+                className="col-span-3"
+                value={technicalReviewDate}
+                onChange={(e) => setTechnicalReviewDate(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="technicalReviewExpiryDate" className="text-right">
+                Fecha Vencimiento Revisión
+              </Label>
+              <Input
+                id="technicalReviewExpiryDate"
+                name="technicalReviewExpiryDate"
+                type="date"
+                className="col-span-3"
+                value={technicalReviewExpiryDate}
+                onChange={(e) => {
+                  setTechnicalReviewExpiryDate(e.target.value);
+                  // Si la fecha está vencida, marcar como inoperativo
+                  if (e.target.value) {
+                    const expiryDate = new Date(e.target.value);
+                    if (expiryDate < new Date()) {
+                      setIsOperational(false);
+                    }
+                  }
+                }}
+              />
+            </div>
+            {/* Permiso Circulación */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="circulationPermitStatus" className="text-right">
+                Permiso Circulación
+              </Label>
+              <Select
+                value={circulationPermitStatus}
+                onValueChange={setCirculationPermitStatus}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Seleccione estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Vigente">Vigente</SelectItem>
+                  <SelectItem value="Vencido">Vencido</SelectItem>
+                  <SelectItem value="Pendiente">Pendiente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Adjuntar Documentación */}
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label className="text-right pt-2">Documentación</Label>
+              <div className="col-span-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="documents"
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx"
+                    className="col-span-3"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setSelectedFiles(Array.from(e.target.files));
+                      }
+                    }}
+                  />
+                </div>
+                {selectedFiles.length > 0 && (
+                  <div className="space-y-1">
+                    {selectedFiles.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
+                        <span className="truncate flex-1">{file.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => {
+                            const newFiles = selectedFiles.filter((_, i) => i !== index);
+                            setSelectedFiles(newFiles);
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Opcional: Fotografías, documentos del fabricante, etc.
+                </p>
+              </div>
             </div>
           </div>
           <DialogFooter>

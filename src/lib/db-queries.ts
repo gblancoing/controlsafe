@@ -43,27 +43,40 @@ export async function getUserById(id: string): Promise<User | null> {
 // Vehículos
 // ============================================
 export async function getVehicles(): Promise<Vehicle[]> {
-  const vehicles = await prisma.vehicle.findMany({
-    include: {
-      company: true,
-    },
-    orderBy: { name: 'asc' },
-  });
+  try {
+    const vehicles = await prisma.vehicle.findMany({
+      include: {
+        company: true,
+      },
+      orderBy: { name: 'asc' },
+    });
 
-  return vehicles.map((v) => ({
-    id: v.id,
-    patent: v.patent || undefined,
-    name: v.name,
-    type: v.type as Vehicle['type'],
-    brand: v.brand || undefined,
-    model: v.model || undefined,
-    year: v.year || undefined,
-    status: v.status as Vehicle['status'],
-    mileage: v.mileage,
-    operatingHours: v.operatingHours,
-    site: v.site,
-    companyId: v.companyId || undefined,
-  }));
+    return vehicles.map((v) => ({
+      id: v.id,
+      patent: v.patent || undefined,
+      name: v.name,
+      type: v.type as Vehicle['type'],
+      brand: v.brand || undefined,
+      model: v.model || undefined,
+      year: v.year || undefined,
+      status: v.status as Vehicle['status'],
+      mileage: v.mileage,
+      operatingHours: v.operatingHours,
+      site: v.site,
+      companyId: v.companyId || undefined,
+    }));
+  } catch (error: any) {
+    console.error('Error fetching vehicles:', error);
+    // Si es un error de conexión, retornar array vacío en lugar de lanzar error
+    if (error.code === 'P1001' || error.message?.includes('Can\'t reach database server')) {
+      console.error('⚠️ No se puede conectar a MySQL. Verifica que:');
+      console.error('   1. MySQL esté corriendo en XAMPP');
+      console.error('   2. La base de datos "controlsafe" exista');
+      console.error('   3. El archivo .env.local tenga la configuración correcta');
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function getVehicleById(id: string): Promise<Vehicle | null> {
@@ -105,22 +118,32 @@ export async function getVehicleById(id: string): Promise<Vehicle | null> {
 // Tareas de Mantenimiento
 // ============================================
 export async function getMaintenanceTasks(): Promise<MaintenanceTask[]> {
-  const tasks = await prisma.maintenanceTask.findMany({
-    orderBy: { dueDate: 'asc' },
-    include: {
-      vehicle: true,
-    },
-  });
+  try {
+    const tasks = await prisma.maintenanceTask.findMany({
+      orderBy: { dueDate: 'asc' },
+      include: {
+        vehicle: true,
+      },
+    });
 
-  return tasks.map((t) => ({
-    id: t.id,
-    vehicleId: t.vehicleId,
-    task: t.task,
-    dueDate: t.dueDate.toISOString(),
-    status: t.status as MaintenanceTask['status'],
-    priority: t.priority as MaintenanceTask['priority'],
-    assignee: t.assignee || undefined,
-  }));
+    return tasks.map((t) => ({
+      id: t.id,
+      vehicleId: t.vehicleId,
+      task: t.task,
+      dueDate: t.dueDate.toISOString(),
+      status: t.status as MaintenanceTask['status'],
+      priority: t.priority as MaintenanceTask['priority'],
+      assignee: t.assignee || undefined,
+    }));
+  } catch (error: any) {
+    console.error('Error fetching maintenance tasks:', error);
+    // Si es un error de conexión, retornar array vacío
+    if (error.code === 'P1001' || error.message?.includes('Can\'t reach database server')) {
+      console.error('⚠️ No se puede conectar a MySQL para obtener tareas de mantenimiento');
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function getMaintenanceTasksByVehicle(vehicleId: string): Promise<MaintenanceTask[]> {

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import type { Vehicle } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { calculateNextDueDate } from '@/lib/date-utils';
 
 // Schema de validación
 const createVehicleSchema = z.object({
@@ -13,12 +14,16 @@ const createVehicleSchema = z.object({
   brand: z.string().optional(),
   model: z.string().optional(),
   year: z.number().int().min(1900).max(2100).optional(),
-  status: z.enum(['Operational', 'Maintenance', 'Out of Service']).default('Operational'),
+  status: z.enum(['Operational', 'Maintenance', 'Out of Service', 'Not Allowed to Operate']).default('Operational'),
   mileage: z.number().int().min(0).default(0),
   operatingHours: z.number().int().min(0).default(0),
   site: z.string().optional(),
   companyId: z.string().optional(),
   driverId: z.string().optional(), // ID del chofer asignado
+  isOperational: z.boolean().optional().default(true),
+  technicalReviewDate: z.date().optional(),
+  technicalReviewExpiryDate: z.date().optional(),
+  circulationPermitStatus: z.enum(['Vigente', 'Vencido', 'Pendiente']).optional(),
 });
 
 // Obtener todos los vehículos
@@ -226,23 +231,42 @@ export async function createVehicle(input: CreateVehicleInput): Promise<{ succes
       }
     }
 
+    // Validar: Si la revisión técnica está vencida, el vehículo debe estar inoperativo
+    const now = new Date();
+    let finalStatus = validated.status || 'Operational';
+    let isOperational = validated.isOperational ?? true;
+
+    if (validated.technicalReviewExpiryDate) {
+      const expiryDate = new Date(validated.technicalReviewExpiryDate);
+      if (expiryDate < now) {
+        // Revisión técnica vencida: vehículo inoperativo
+        isOperational = false;
+        finalStatus = 'Not Allowed to Operate';
+      }
+    }
+
     // Crear el vehículo y asignar chofer si se proporciona
     await prisma.$transaction(async (tx) => {
       // Crear el vehículo
-      await tx.vehicle.create({
+      await (tx.vehicle.create as any)({
         data: {
           id: vehicleId,
           patent: validated.patent || null,
           name: validated.name,
-          type: validated.type,
+          type: validated.type, // Mantener para compatibilidad
+          vehicleTypeId: input.vehicleTypeId || null, // Nuevo campo
           brand: validated.brand || null,
           model: validated.model || null,
           year: validated.year || null,
-          status: validated.status || 'Operational',
+          status: finalStatus,
           mileage: validated.mileage || 0,
           operatingHours: validated.operatingHours || 0,
           site: validated.site || 'Sin sitio asignado',
           companyId: validated.companyId || null,
+          isOperational: isOperational,
+          technicalReviewDate: validated.technicalReviewDate || null,
+          technicalReviewExpiryDate: validated.technicalReviewExpiryDate || null,
+          circulationPermitStatus: validated.circulationPermitStatus || null,
         },
       });
 
@@ -413,8 +437,16 @@ export async function assignMaintenanceProgram(
     }
 
     // Verificar que el programa existe
-    const program = await prisma.maintenanceProgram.findUnique({
+    // Usar 'as any' temporalmente si Prisma Client no está sincronizado
+    const program = await (prisma.maintenanceProgram.findUnique as any)({
       where: { id: programId },
+      select: {
+        id: true,
+        name: true,
+        frequencyValue: true,
+        frequencyUnit: true,
+        useBusinessDays: true,
+      },
     });
 
     if (!program) {
@@ -422,7 +454,8 @@ export async function assignMaintenanceProgram(
     }
 
     // Verificar si ya está asignado
-    const existing = await prisma.vehicleMaintenanceProgram.findUnique({
+    // Usar 'as any' temporalmente si Prisma Client no está sincronizado
+    const existing = await (prisma.vehicleMaintenanceProgram.findUnique as any)({
       where: {
         vehicleId_programId: {
           vehicleId,
@@ -435,25 +468,76 @@ export async function assignMaintenanceProgram(
       return { success: false, error: 'Este programa ya está asignado al vehículo.' };
     }
 
+    // Calcular próxima fecha de revisión
+    const now = new Date();
+    const useBusinessDays = (program as any).useBusinessDays || false;
+    console.log('[Asignar Programa] Datos del programa:', {
+      id: program.id,
+      name: program.name,
+      frequencyValue: program.frequencyValue,
+      frequencyUnit: program.frequencyUnit,
+      useBusinessDays,
+    });
+    
+    const nextDueDate = calculateNextDueDate(
+      now,
+      program.frequencyValue,
+      program.frequencyUnit,
+      useBusinessDays
+    );
+    
+    console.log('[Asignar Programa] Próxima fecha calculada:', nextDueDate.toISOString());
+
     // Asignar el programa
+    // Usar 'as any' temporalmente hasta que Prisma Client se regenere después de la migración SQL
     const assignmentId = `vmp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    await prisma.vehicleMaintenanceProgram.create({
+    console.log('[Asignar Programa] Creando asignación:', {
+      id: assignmentId,
+      vehicleId,
+      programId,
+      nextDueDate: nextDueDate.toISOString(),
+    });
+    
+    await (prisma.vehicleMaintenanceProgram.create as any)({
       data: {
         id: assignmentId,
         vehicleId,
         programId,
+        nextDueDate,
       },
     });
 
+    console.log('[Asignar Programa] Asignación creada exitosamente');
     revalidatePath(`/flota/${vehicleId}`);
     revalidatePath(`/flota/${vehicleId}/ficha`);
+    revalidatePath('/torque'); // También revalidar Control Preventivo
+    revalidatePath('/flota'); // Revalidar lista de flota
     return { success: true };
   } catch (error: any) {
-    console.error('Error assigning maintenance program:', error);
+    console.error('[Asignar Programa] Error completo:', error);
+    console.error('[Asignar Programa] Detalles del error:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+      stack: error.stack,
+    });
+    
     if (error.code === 'P2002') {
       return { success: false, error: 'Este programa ya está asignado al vehículo.' };
     }
-    return { success: false, error: 'No se pudo asignar el programa de mantenimiento.' };
+    if (error.code === 'P2003') {
+      return { success: false, error: 'Error de referencia: Verifique que el vehículo y el programa existen.' };
+    }
+    if (error.message?.includes('Unknown field') || error.message?.includes('Unknown argument')) {
+      return { 
+        success: false, 
+        error: 'Prisma Client desincronizado. Ejecuta: npm run db:generate' 
+      };
+    }
+    return { 
+      success: false, 
+      error: error.message || 'No se pudo asignar el programa de mantenimiento. Revisa la consola para más detalles.' 
+    };
   }
 }
 

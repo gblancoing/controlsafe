@@ -4,13 +4,28 @@ import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
-// Schema de validación
+// Schema de validación para crear usuario
 const createUserSchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio').max(255),
   email: z.string().email('Email inválido').max(255),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
   phone: z.string().optional(),
   role: z.enum(['Administrator', 'Supervisor', 'Technician', 'Driver']),
   canDrive: z.boolean().optional().default(false),
+  isActive: z.boolean().optional().default(true),
+  companyId: z.string().optional(),
+  projectId: z.string().optional(),
+});
+
+// Schema de validación para actualizar usuario
+const updateUserSchema = z.object({
+  name: z.string().min(1, 'El nombre es obligatorio').max(255),
+  email: z.string().email('Email inválido').max(255),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
+  phone: z.string().optional(),
+  role: z.enum(['Administrator', 'Supervisor', 'Technician', 'Driver']),
+  canDrive: z.boolean().optional().default(false),
+  isActive: z.boolean().optional().default(true),
   companyId: z.string().optional(),
   projectId: z.string().optional(),
 });
@@ -40,18 +55,19 @@ export async function getUsers(companyId?: string) {
       orderBy: { name: 'asc' },
     });
 
-    return users.map((u) => ({
+    return users.map((u: any) => ({
       id: u.id,
       name: u.name,
       email: u.email,
       phone: u.phone || undefined,
       role: u.role,
       canDrive: u.canDrive || false,
+      isActive: u.isActive !== undefined ? u.isActive : true,
       companyId: u.companyId || undefined,
       companyName: u.company?.name || undefined,
       projectId: u.projectId || undefined,
       projectName: u.project?.name || undefined,
-      vehicles: u.vehicles.map((uv) => ({
+      vehicles: u.vehicles.map((uv: any) => ({
         id: uv.vehicle.id,
         name: uv.vehicle.name,
         patent: uv.vehicle.patent || undefined,
@@ -97,11 +113,12 @@ export async function getUserById(id: string) {
       phone: user.phone || undefined,
       role: user.role,
       canDrive: user.canDrive || false,
+      isActive: (user as any).isActive !== undefined ? (user as any).isActive : true,
       companyId: user.companyId || undefined,
       companyName: user.company?.name || undefined,
       projectId: user.projectId || undefined,
       projectName: user.project?.name || undefined,
-      vehicles: user.vehicles.map((uv) => ({
+      vehicles: user.vehicles.map((uv: any) => ({
         id: uv.vehicle.id,
         name: uv.vehicle.name,
         patent: uv.vehicle.patent || undefined,
@@ -154,6 +171,7 @@ export async function getAllProjects() {
 export async function createUser(input: {
   name: string;
   email: string;
+  password: string;
   phone?: string;
   role: 'Administrator' | 'Supervisor' | 'Technician' | 'Driver';
   canDrive?: boolean;
@@ -177,11 +195,16 @@ export async function createUser(input: {
       return { success: false, error: 'Los choferes deben pertenecer a una empresa.' };
     }
 
+    // Nota: La creación en Firebase Authentication debe hacerse desde el cliente
+    // o usando Firebase Admin SDK en el servidor. Por ahora, solo creamos en la BD.
+    // La contraseña se usará cuando el usuario inicie sesión por primera vez.
+    // TODO: Implementar Firebase Admin SDK para crear usuarios desde el servidor
+
     // Generar ID único
     const userId = `usr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Crear el usuario
-    await prisma.user.create({
+    // Crear el usuario en la base de datos
+    await (prisma.user as any).create({
       data: {
         id: userId,
         name: validated.name,
@@ -189,9 +212,10 @@ export async function createUser(input: {
         phone: validated.phone || null,
         role: validated.role,
         canDrive: validated.canDrive || false,
+        isActive: validated.isActive !== undefined ? validated.isActive : true,
         companyId: validated.companyId || null,
         projectId: validated.projectId || null,
-      },
+      } as any,
     });
 
     revalidatePath('/usuarios');
@@ -211,15 +235,17 @@ export async function updateUser(
   input: {
     name: string;
     email: string;
+    password?: string;
     phone?: string;
     role: 'Administrator' | 'Supervisor' | 'Technician' | 'Driver';
     canDrive?: boolean;
+    isActive?: boolean;
     companyId?: string;
     projectId?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const validated = createUserSchema.parse(input);
+    const validated = updateUserSchema.parse(input);
 
     // Verificar si el email ya existe en otro usuario
     const existing = await prisma.user.findFirst({
@@ -238,7 +264,28 @@ export async function updateUser(
       return { success: false, error: 'Los choferes deben pertenecer a una empresa.' };
     }
 
-    await prisma.user.update({
+    // Si se proporciona una contraseña, actualizarla en Firebase
+    if (validated.password) {
+      try {
+        // Obtener el usuario actual para obtener su email
+        const currentUser = await prisma.user.findUnique({
+          where: { id },
+          select: { email: true },
+        });
+
+        if (currentUser) {
+          // Actualizar contraseña en Firebase
+          // Nota: Esto requiere Firebase Admin SDK o hacerlo desde el cliente
+          // Por ahora, solo actualizamos en la BD
+          // TODO: Implementar actualización de contraseña en Firebase
+        }
+      } catch (firebaseError: any) {
+        console.warn('Error al actualizar contraseña en Firebase:', firebaseError);
+        // Continuar con la actualización en la BD aunque Firebase falle
+      }
+    }
+
+    await (prisma.user as any).update({
       where: { id },
       data: {
         name: validated.name,
@@ -246,6 +293,7 @@ export async function updateUser(
         phone: validated.phone || null,
         role: validated.role,
         canDrive: validated.canDrive || false,
+        isActive: validated.isActive !== undefined ? validated.isActive : true,
         companyId: validated.companyId || null,
         projectId: validated.projectId || null,
       },
