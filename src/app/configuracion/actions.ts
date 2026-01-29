@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { getCurrentUserScope, getSessionUserId } from '@/lib/auth';
+import { getAllowedCompanyIds } from '@/lib/scope';
 
 // Schema para política de notificación
 const notificationPolicySchema = z.object({
@@ -92,24 +94,57 @@ const bulkMessageSchema = z.object({
   message: z.string().min(1, 'El mensaje es requerido'),
   recipientType: z.enum(['all', 'companies', 'users', 'specific']),
   recipientIds: z.array(z.string()).optional(),
+  recipientEmails: z.array(z.string().min(1)).optional(),
   sentBy: z.string().min(1, 'El remitente es requerido'),
 });
 
-// Obtener usuarios para mensajes masivos
+// Solo Super Admin y Administrador pueden usar mensajes masivos
+const BULK_MESSAGE_ALLOWED_ROLES = ['SuperAdmin', 'Administrator'];
+
+/** Usuario actual para mensajes masivos (solo si es Super Admin o Administrador). */
+export async function getCurrentUserForBulkMessage(): Promise<{ success: true; data: { id: string; name: string; role: string } } | { success: false; error: string }> {
+  try {
+    const userId = await getSessionUserId();
+    if (!userId) return { success: false, error: 'Debe iniciar sesión' };
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, role: true },
+    });
+    if (!user) return { success: false, error: 'Usuario no encontrado' };
+    if (!BULK_MESSAGE_ALLOWED_ROLES.includes(user.role)) {
+      return { success: false, error: 'Solo Super Admin y Administrador pueden enviar mensajes masivos' };
+    }
+    return { success: true, data: { id: user.id, name: user.name, role: user.role } };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Error al obtener usuario' };
+  }
+}
+
+// Obtener usuarios para mensajes masivos (según alcance: SuperAdmin todos; Admin solo su proyecto)
 export async function getUsersForBulkMessage() {
   try {
+    const scope = await getCurrentUserScope();
+    if (!scope) return { success: false, error: 'Debe iniciar sesión', data: [] };
+    if (!BULK_MESSAGE_ALLOWED_ROLES.includes(scope.role)) {
+      return { success: false, error: 'No autorizado', data: [] };
+    }
+    const allowedCompanyIds = await getAllowedCompanyIds();
+    if (allowedCompanyIds && allowedCompanyIds.length === 0) {
+      return { success: true, data: [] };
+    }
+    const where: any = { isActive: true };
+    if (allowedCompanyIds !== null) {
+      where.companyId = { in: allowedCompanyIds };
+    }
     const users = await prisma.user.findMany({
-      where: { isActive: true },
+      where,
       select: {
         id: true,
         name: true,
         email: true,
         companyId: true,
         company: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
       },
       orderBy: { name: 'asc' },
@@ -117,14 +152,28 @@ export async function getUsersForBulkMessage() {
     return { success: true, data: users };
   } catch (error: any) {
     console.error('Error getting users:', error);
-    return { success: false, error: 'Error al obtener usuarios' };
+    return { success: false, error: 'Error al obtener usuarios', data: [] };
   }
 }
 
-// Obtener empresas para mensajes masivos
+// Obtener empresas para mensajes masivos (según alcance: SuperAdmin todas; Admin solo las de su proyecto)
 export async function getCompaniesForBulkMessage() {
   try {
+    const scope = await getCurrentUserScope();
+    if (!scope) return { success: false, error: 'Debe iniciar sesión', data: [] };
+    if (!BULK_MESSAGE_ALLOWED_ROLES.includes(scope.role)) {
+      return { success: false, error: 'No autorizado', data: [] };
+    }
+    const allowedCompanyIds = await getAllowedCompanyIds();
+    if (allowedCompanyIds && allowedCompanyIds.length === 0) {
+      return { success: true, data: [] };
+    }
+    const where: any = {};
+    if (allowedCompanyIds !== null) {
+      where.id = { in: allowedCompanyIds };
+    }
     const companies = await prisma.company.findMany({
+      where,
       select: {
         id: true,
         name: true,
@@ -136,83 +185,108 @@ export async function getCompaniesForBulkMessage() {
     return { success: true, data: companies };
   } catch (error: any) {
     console.error('Error getting companies:', error);
-    return { success: false, error: 'Error al obtener empresas' };
+    return { success: false, error: 'Error al obtener empresas', data: [] };
   }
 }
 
-// Enviar mensaje masivo
+// Enviar mensaje masivo (solo Super Admin y Administrador; alcance por rol)
 export async function sendBulkMessage(data: z.infer<typeof bulkMessageSchema>) {
   try {
+    const scope = await getCurrentUserScope();
+    if (!scope) return { success: false, error: 'Debe iniciar sesión' };
+    if (!BULK_MESSAGE_ALLOWED_ROLES.includes(scope.role)) {
+      return { success: false, error: 'Solo Super Admin y Administrador pueden enviar mensajes masivos' };
+    }
+    const allowedCompanyIds = await getAllowedCompanyIds();
+
     const validated = bulkMessageSchema.parse(data);
     let recipients: Array<{ email: string; name: string }> = [];
-    let totalRecipients = 0;
 
-    // Determinar destinatarios según el tipo
+    // Construir filtro de alcance para usuarios: SuperAdmin sin filtro; Admin solo su proyecto
+    const userScopeWhere: any = { isActive: true };
+    if (allowedCompanyIds !== null && allowedCompanyIds.length > 0) {
+      userScopeWhere.companyId = { in: allowedCompanyIds };
+    }
+
     if (validated.recipientType === 'all') {
-      // Todos los usuarios activos
+      // Todos los usuarios activos dentro del alcance del remitente (con email para enviar)
       const users = await prisma.user.findMany({
-        where: { isActive: true, email: { not: null } },
+        where: userScopeWhere,
         select: { email: true, name: true },
       });
-      recipients = users.map(u => ({ email: u.email, name: u.name }));
+      recipients = users.filter(u => u.email).map(u => ({ email: u.email!, name: u.name }));
     } else if (validated.recipientType === 'companies') {
-      // Usuarios de empresas específicas
+      // Usuarios de empresas específicas (solo IDs dentro del alcance)
       if (validated.recipientIds && validated.recipientIds.length > 0) {
-        const users = await prisma.user.findMany({
-          where: {
-            isActive: true,
-            companyId: { in: validated.recipientIds },
-            email: { not: null },
-          },
-          select: { email: true, name: true },
-        });
-        recipients = users.map(u => ({ email: u.email, name: u.name }));
-      }
-    } else if (validated.recipientType === 'users') {
-      // Usuarios específicos
-      if (validated.recipientIds && validated.recipientIds.length > 0) {
-        const users = await prisma.user.findMany({
-          where: {
-            id: { in: validated.recipientIds },
-            isActive: true,
-            email: { not: null },
-          },
-          select: { email: true, name: true },
-        });
-        recipients = users.map(u => ({ email: u.email, name: u.name }));
-      }
-    } else if (validated.recipientType === 'specific') {
-      // IDs específicos (pueden ser usuarios o empresas)
-      if (validated.recipientIds && validated.recipientIds.length > 0) {
-        // Intentar como usuarios primero
-        const users = await prisma.user.findMany({
-          where: {
-            id: { in: validated.recipientIds },
-            isActive: true,
-            email: { not: null },
-          },
-          select: { email: true, name: true },
-        });
-        recipients = users.map(u => ({ email: u.email, name: u.name }));
-
-        // Si no hay usuarios, buscar empresas
-        if (recipients.length === 0) {
-          const companies = await prisma.company.findMany({
+        const companyIds = allowedCompanyIds === null
+          ? validated.recipientIds
+          : validated.recipientIds.filter(id => allowedCompanyIds.includes(id));
+        if (companyIds.length > 0) {
+          const users = await prisma.user.findMany({
             where: {
-              id: { in: validated.recipientIds },
-              email: { not: null },
+              isActive: true,
+              companyId: { in: companyIds },
             },
             select: { email: true, name: true },
           });
-          recipients = companies.map(c => ({ 
-            email: c.email!, 
-            name: c.name 
+          recipients = users.filter(u => u.email).map(u => ({ email: u.email!, name: u.name }));
+        }
+      }
+    } else if (validated.recipientType === 'users') {
+      // Usuarios específicos: por IDs (dentro del alcance) y/o por correos escritos
+      if (validated.recipientIds && validated.recipientIds.length > 0) {
+        const users = await prisma.user.findMany({
+          where: {
+            id: { in: validated.recipientIds },
+            ...userScopeWhere,
+          },
+          select: { email: true, name: true },
+        });
+        recipients = users.filter(u => u.email).map(u => ({ email: u.email!, name: u.name }));
+      }
+      if (validated.recipientEmails && validated.recipientEmails.length > 0) {
+        const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const extra = validated.recipientEmails
+          .filter((e) => emailLike.test(e.trim()))
+          .map((email) => ({
+            email: email.trim().toLowerCase(),
+            name: email.split('@')[0] || 'Usuario',
           }));
+        recipients = [...recipients, ...extra];
+      }
+    } else if (validated.recipientType === 'specific') {
+      // IDs específicos (usuarios o empresas); solo los que están en alcance
+      if (validated.recipientIds && validated.recipientIds.length > 0) {
+        const ids = validated.recipientIds;
+        const userWhere: any = {
+          id: { in: ids },
+          isActive: true,
+        };
+        if (allowedCompanyIds !== null && allowedCompanyIds.length > 0) {
+          userWhere.companyId = { in: allowedCompanyIds };
+        }
+        const users = await prisma.user.findMany({
+          where: userWhere,
+          select: { email: true, name: true },
+        });
+        recipients = users.filter(u => u.email).map(u => ({ email: u.email!, name: u.name }));
+        const usedEmails = new Set(recipients.map(r => r.email));
+        const companyWhere: any = { id: { in: ids } };
+        if (allowedCompanyIds !== null && allowedCompanyIds.length > 0) {
+          companyWhere.id = { in: ids.filter(id => allowedCompanyIds.includes(id)) };
+        }
+        const companies = await prisma.company.findMany({
+          where: companyWhere,
+          select: { email: true, name: true },
+        });
+        for (const c of companies) {
+          if (c.email && !usedEmails.has(c.email)) {
+            recipients.push({ email: c.email, name: c.name });
+            usedEmails.add(c.email);
+          }
         }
       }
     }
-
-    totalRecipients = recipients.length;
 
     // Eliminar duplicados por email
     const uniqueRecipients = Array.from(
@@ -270,7 +344,8 @@ export async function sendBulkMessage(data: z.infer<typeof bulkMessageSchema>) {
     if (error instanceof z.ZodError) {
       return { success: false, error: error.errors[0].message };
     }
-    return { success: false, error: 'Error al enviar el mensaje masivo' };
+    const message = error?.message || error?.toString?.() || 'Error al enviar el mensaje masivo';
+    return { success: false, error: message };
   }
 }
 

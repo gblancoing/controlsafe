@@ -21,11 +21,10 @@ import {
 } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Send, Mail, Users, Building2, UserCheck } from 'lucide-react';
-import { sendBulkMessage, getUsersForBulkMessage, getCompaniesForBulkMessage } from '../actions';
+import { sendBulkMessage, getUsersForBulkMessage, getCompaniesForBulkMessage, getCurrentUserForBulkMessage } from '../actions';
 import { useTransition } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { getUsers } from '@/lib/db-queries';
 
 interface User {
   id: string;
@@ -60,35 +59,47 @@ export function BulkMessageSender() {
     selectedCompanyIds: [] as string[],
     selectedUserIds: [] as string[],
     selectedSpecificIds: [] as string[],
+    recipientEmails: '', // correos escritos a mano (usuarios específicos)
   });
 
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentUserName, setCurrentUserName] = useState<string>('');
+  const [unauthorized, setUnauthorized] = useState<boolean>(false);
 
   useEffect(() => {
-    // Cargar datos y usuario actual
     const loadData = async () => {
       setIsLoadingData(true);
+      setError(null);
       try {
-        const [usersResult, companiesResult, allUsers] = await Promise.all([
+        const currentUserResult = await getCurrentUserForBulkMessage();
+        if (!currentUserResult.success) {
+          setUnauthorized(true);
+          setError(currentUserResult.error ?? 'No autorizado');
+          setIsLoadingData(false);
+          return;
+        }
+        setUnauthorized(false);
+        setCurrentUserId(currentUserResult.data.id);
+        setCurrentUserName(currentUserResult.data.name);
+
+        const [usersResult, companiesResult] = await Promise.all([
           getUsersForBulkMessage(),
           getCompaniesForBulkMessage(),
-          getUsers(),
         ]);
 
         if (usersResult.success) {
-          setUsers(usersResult.data);
+          setUsers(usersResult.data ?? []);
+        } else if (usersResult.error) {
+          setError(usersResult.error);
         }
         if (companiesResult.success) {
-          setCompanies(companiesResult.data);
+          setCompanies(companiesResult.data ?? []);
+        } else if (companiesResult.error && !usersResult.error) {
+          setError(companiesResult.error);
         }
-
-        // Obtener el primer usuario Administrator o el primero disponible
-        const adminUser = allUsers.find((u: UserType) => u.role === 'Administrator') || allUsers[0];
-        if (adminUser) {
-          setCurrentUserId(adminUser.id);
-        }
-      } catch (error) {
-        console.error('Error loading data:', error);
+      } catch (err) {
+        console.error('Error loading data:', err);
+        setError('Error al cargar datos');
       } finally {
         setIsLoadingData(false);
       }
@@ -107,6 +118,29 @@ export function BulkMessageSender() {
       return;
     }
 
+    const parsedEmailsForValidation = formData.recipientEmails
+      ? formData.recipientEmails
+          .split(/[\n,]+/)
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean)
+      : [];
+
+    if (formData.recipientType === 'users') {
+      if (
+        formData.selectedUserIds.length === 0 &&
+        parsedEmailsForValidation.length === 0
+      ) {
+        setError(
+          'Selecciona al menos un usuario de la lista o escribe al menos un correo electrónico.'
+        );
+        return;
+      }
+    }
+    if (formData.recipientType === 'companies' && formData.selectedCompanyIds.length === 0) {
+      setError('Selecciona al menos una empresa.');
+      return;
+    }
+
     let recipientIds: string[] = [];
 
     if (formData.recipientType === 'companies') {
@@ -117,12 +151,15 @@ export function BulkMessageSender() {
       recipientIds = formData.selectedSpecificIds;
     }
 
+    const parsedEmails = parsedEmailsForValidation;
+
     startTransition(async () => {
       const result = await sendBulkMessage({
         subject: formData.subject,
         message: formData.message,
         recipientType: formData.recipientType,
         recipientIds: recipientIds.length > 0 ? recipientIds : undefined,
+        recipientEmails: formData.recipientType === 'users' && parsedEmails.length > 0 ? parsedEmails : undefined,
         sentBy: currentUserId,
       });
 
@@ -140,6 +177,7 @@ export function BulkMessageSender() {
           selectedCompanyIds: [],
           selectedUserIds: [],
           selectedSpecificIds: [],
+          recipientEmails: '',
         });
       } else {
         setError(result.error || 'Error al enviar el mensaje masivo');
@@ -178,11 +216,25 @@ export function BulkMessageSender() {
     return <div className="text-center py-8">Cargando...</div>;
   }
 
+  if (unauthorized) {
+    return (
+      <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>
+          Solo Super Admin y Administrador pueden enviar mensajes masivos. Si es Administrador, asegúrese de tener un proyecto asignado para ver empresas y usuarios.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Mail className="h-5 w-5 text-muted-foreground" />
         <h3 className="text-lg font-semibold">Enviar Mensaje Masivo</h3>
+        {currentUserName && (
+          <span className="text-sm text-muted-foreground">(Enviando como: {currentUserName})</span>
+        )}
       </div>
 
       {error && (
@@ -202,40 +254,6 @@ export function BulkMessageSender() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Contenido del Mensaje</CardTitle>
-            <CardDescription>Escribe el asunto y el mensaje que se enviará a los destinatarios</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="subject">Asunto *</Label>
-              <Input
-                id="subject"
-                value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                placeholder="Ej: Recordatorio de Mantenimiento Preventivo"
-                required
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="message">Mensaje *</Label>
-              <Textarea
-                id="message"
-                value={formData.message}
-                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                placeholder="Escribe el mensaje que se enviará a los destinatarios..."
-                rows={8}
-                required
-              />
-              <p className="text-sm text-muted-foreground">
-                El mensaje se enviará por correo electrónico a los destinatarios seleccionados.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader>
             <CardTitle>Destinatarios</CardTitle>
@@ -281,55 +299,113 @@ export function BulkMessageSender() {
             </div>
 
             {formData.recipientType === 'companies' && (
-              <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
-                <Label className="mb-3 block">Seleccionar Empresas</Label>
-                <div className="space-y-2">
-                  {companies.map((company) => (
-                    <div key={company.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`company-${company.id}`}
-                        checked={formData.selectedCompanyIds.includes(company.id)}
-                        onCheckedChange={() => toggleCompanySelection(company.id)}
-                      />
-                      <Label
-                        htmlFor={`company-${company.id}`}
-                        className="text-sm font-normal cursor-pointer"
-                      >
-                        {company.name} {company.email && `(${company.email})`}
-                      </Label>
-                    </div>
-                  ))}
+              <>
+                <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
+                  <Label className="mb-3 block">Seleccionar Empresas</Label>
+                  <div className="space-y-2">
+                    {companies.map((company) => (
+                      <div key={company.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`company-${company.id}`}
+                          checked={formData.selectedCompanyIds.includes(company.id)}
+                          onCheckedChange={() => toggleCompanySelection(company.id)}
+                        />
+                        <Label
+                          htmlFor={`company-${company.id}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {company.name} {company.email && `(${company.email})`}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                  {companies.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No hay empresas en su ámbito. Super Admin ve todas; Administrador solo las de su proyecto asignado. Asigne un proyecto con empresas si es Administrador.
+                    </p>
+                  )}
                 </div>
-                {companies.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No hay empresas disponibles</p>
+                {formData.selectedCompanyIds.length > 0 && (
+                  <div className="border rounded-lg p-4 max-h-64 overflow-y-auto bg-muted/30">
+                    <Label className="mb-3 block">Usuarios que recibirán el mensaje</Label>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Usuarios de las empresas seleccionadas:
+                    </p>
+                    <div className="space-y-2">
+                      {users
+                        .filter(
+                          (u) =>
+                            u.companyId && formData.selectedCompanyIds.includes(u.companyId)
+                        )
+                        .map((user) => (
+                          <div
+                            key={user.id}
+                            className="flex items-center gap-2 text-sm py-1 border-b border-border/50 last:border-0"
+                          >
+                            <Mail className="h-3.5 w-3 text-muted-foreground" />
+                            {user.name} ({user.email})
+                            {user.company && (
+                              <span className="text-muted-foreground">— {user.company.name}</span>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                    {users.filter(
+                      (u) => u.companyId && formData.selectedCompanyIds.includes(u.companyId)
+                    ).length === 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        No hay usuarios activos en las empresas seleccionadas.
+                      </p>
+                    )}
+                  </div>
                 )}
-              </div>
+              </>
             )}
 
             {formData.recipientType === 'users' && (
-              <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
-                <Label className="mb-3 block">Seleccionar Usuarios</Label>
-                <div className="space-y-2">
-                  {users.map((user) => (
-                    <div key={user.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`user-${user.id}`}
-                        checked={formData.selectedUserIds.includes(user.id)}
-                        onCheckedChange={() => toggleUserSelection(user.id)}
-                      />
-                      <Label
-                        htmlFor={`user-${user.id}`}
-                        className="text-sm font-normal cursor-pointer"
-                      >
-                        {user.name} ({user.email}) {user.company && `- ${user.company.name}`}
-                      </Label>
-                    </div>
-                  ))}
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="recipientEmails">Correos electrónicos (opcional)</Label>
+                  <Textarea
+                    id="recipientEmails"
+                    value={formData.recipientEmails}
+                    onChange={(e) =>
+                      setFormData({ ...formData, recipientEmails: e.target.value })
+                    }
+                    placeholder="Escribe direcciones de correo, una por línea o separadas por coma. Ej: usuario@ejemplo.com, otro@ejemplo.com"
+                    rows={3}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Añade correos que no estén en la lista de usuarios, o usa solo esta opción.
+                  </p>
                 </div>
-                {users.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No hay usuarios disponibles</p>
-                )}
-              </div>
+                <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
+                  <Label className="mb-3 block">Seleccionar Usuarios</Label>
+                  <div className="space-y-2">
+                    {users.map((user) => (
+                      <div key={user.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`user-${user.id}`}
+                          checked={formData.selectedUserIds.includes(user.id)}
+                          onCheckedChange={() => toggleUserSelection(user.id)}
+                        />
+                        <Label
+                          htmlFor={`user-${user.id}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {user.name} ({user.email}) {user.company && `- ${user.company.name}`}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                  {users.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No hay usuarios en su ámbito, o puede usar solo los correos de arriba. Super Admin ve todos; Administrador solo los de su proyecto.
+                    </p>
+                  )}
+                </div>
+              </>
             )}
 
             {formData.recipientType === 'specific' && (
@@ -380,10 +456,44 @@ export function BulkMessageSender() {
             {formData.recipientType === 'all' && (
               <Alert>
                 <AlertDescription>
-                  El mensaje se enviará a todos los usuarios activos del sistema.
+                  El mensaje se enviará a todos los usuarios activos de su ámbito (Super Admin: todo el sistema; Administrador: usuarios de su proyecto).
                 </AlertDescription>
               </Alert>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Contenido del Mensaje</CardTitle>
+            <CardDescription>Escribe el asunto y el mensaje que se enviará a los destinatarios</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="subject">Asunto *</Label>
+              <Input
+                id="subject"
+                value={formData.subject}
+                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                placeholder="Ej: Recordatorio de Mantenimiento Preventivo"
+                required
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="message">Mensaje *</Label>
+              <Textarea
+                id="message"
+                value={formData.message}
+                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                placeholder="Escribe el mensaje que se enviará a los destinatarios..."
+                rows={8}
+                required
+              />
+              <p className="text-sm text-muted-foreground">
+                El mensaje se enviará por correo electrónico a los destinatarios seleccionados.
+              </p>
+            </div>
           </CardContent>
         </Card>
 

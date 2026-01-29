@@ -40,10 +40,14 @@ export async function getCompanyById(id: string): Promise<Company | null> {
   }
 }
 
-// Obtener todas las empresas
+// Obtener todas las empresas (filtradas por alcance: SuperAdmin todas; Admin del proyecto; resto solo la suya)
 export async function getCompanies(): Promise<Company[] | null> {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const where = allowedIds === null ? {} : { id: { in: allowedIds } };
     const companies = await prisma.company.findMany({
+      where,
       orderBy: { name: 'asc' },
     });
 

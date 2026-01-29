@@ -42,7 +42,7 @@ export function VehicleTypeActions({ type }: { type: VehicleTypeModel }) {
           description: 'El tipo de vehículo se ha eliminado correctamente.',
         });
         setShowDeleteDialog(false);
-        router.refresh();
+        setTimeout(() => router.refresh(), 150);
       } else {
         toast({
           title: 'Error',

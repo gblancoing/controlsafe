@@ -7,21 +7,29 @@ import { ComplianceReportCard } from './_components/compliance-report-card';
 import { FleetStatusReportCard } from './_components/fleet-status-report-card';
 import { ProgramUtilizationReportCard } from './_components/program-utilization-report-card';
 import { ReviewsReportCard } from './_components/reviews-report-card';
+import { DeviationsReportCard } from './_components/deviations-report-card';
 import {
   getComplianceReport,
   getFleetStatusReport,
   getProgramUtilizationReport,
   getReviewsReport,
+  getDeviationsReport,
 } from './actions';
 
 export default async function ReportesPage() {
-  const [complianceReport, fleetStatusReport, programUtilizationReport, reviewsReport] =
-    await Promise.all([
-      getComplianceReport(),
-      getFleetStatusReport(),
-      getProgramUtilizationReport(),
-      getReviewsReport(),
-    ]);
+  const [
+    complianceReport,
+    fleetStatusReport,
+    programUtilizationReport,
+    reviewsReport,
+    deviationsReport,
+  ] = await Promise.all([
+    getComplianceReport(),
+    getFleetStatusReport(),
+    getProgramUtilizationReport(),
+    getReviewsReport(),
+    getDeviationsReport(),
+  ]);
 
   return (
     <SidebarProvider>
@@ -38,11 +46,12 @@ export default async function ReportesPage() {
             </div>
 
             <Tabs defaultValue="cumplimiento" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="cumplimiento">Cumplimiento</TabsTrigger>
                 <TabsTrigger value="flota">Estado de Flota</TabsTrigger>
                 <TabsTrigger value="programas">Programas</TabsTrigger>
                 <TabsTrigger value="revisiones">Revisiones</TabsTrigger>
+                <TabsTrigger value="desviaciones">Desviaciones</TabsTrigger>
               </TabsList>
 
               <TabsContent value="cumplimiento" className="mt-4">
@@ -59,6 +68,10 @@ export default async function ReportesPage() {
 
               <TabsContent value="revisiones" className="mt-4">
                 <ReviewsReportCard report={reviewsReport} />
+              </TabsContent>
+
+              <TabsContent value="desviaciones" className="mt-4">
+                <DeviationsReportCard report={deviationsReport} />
               </TabsContent>
             </Tabs>
           </div>

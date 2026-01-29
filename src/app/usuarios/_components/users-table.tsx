@@ -26,6 +26,7 @@ type User = {
 export function UsersTable({ users }: { users: User[] }) {
   const getRoleLabel = (role: string) => {
     const roleMap: Record<string, string> = {
+      SuperAdmin: 'Super Admin',
       Administrator: 'Administrador',
       Supervisor: 'Supervisor',
       Technician: 'Técnico',
@@ -36,6 +37,8 @@ export function UsersTable({ users }: { users: User[] }) {
 
   const getRoleVariant = (role: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (role) {
+      case 'SuperAdmin':
+        return 'destructive';
       case 'Administrator':
         return 'destructive';
       case 'Supervisor':

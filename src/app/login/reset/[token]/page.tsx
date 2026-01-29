@@ -196,7 +196,10 @@ export default function ResetPasswordPage() {
         </CardContent>
         <CardFooter className="flex flex-col gap-2">
           <Link href="/login" className="w-full">
-            <Button variant="outline" className="w-full border-white/20 text-white hover:bg-white/10">
+            <Button
+              variant="outline"
+              className="w-full border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Volver al Login
             </Button>

@@ -6,7 +6,7 @@ import { Bell } from 'lucide-react';
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
+    <header className="sticky top-0 z-10 flex h-16 min-h-[44px] items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6 safe-area-padding-x">
       <SidebarTrigger />
       <div className="flex-1">
         <h1 className="text-lg font-semibold md:text-2xl">Panel de Control</h1>

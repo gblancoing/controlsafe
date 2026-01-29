@@ -13,17 +13,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Truck, AlertTriangle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
+import { loginWithPassword } from './actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState('admin@controlsafe.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,27 +29,17 @@ export default function LoginPage() {
     setIsLoading(true);
     setError(null);
 
-    try {
-      // Intentar autenticación con Firebase
-      await signInWithEmailAndPassword(auth, email, password);
-      // Si la autenticación es exitosa, redirigir al dashboard
-      router.push('/dashboard');
-    } catch (error: any) {
-      // Si Firebase no está configurado o hay error, permitir acceso básico
-      // En producción, esto debería validarse correctamente
-      if (error?.code === 'auth/invalid-credential' || error?.code === 'auth/user-not-found') {
-        setError('Credenciales inválidas. Por favor, inténtelo de nuevo.');
-      } else if (error?.code === 'auth/network-request-failed' || error?.message?.includes('Firebase')) {
-        // Si Firebase no está configurado, permitir acceso básico para desarrollo
-        console.warn('Firebase no configurado, permitiendo acceso básico');
-        router.push('/dashboard');
-      } else {
-        setError('Error al iniciar sesión. Por favor, inténtelo de nuevo.');
-        console.error("Error de autenticación:", error);
-      }
-    } finally {
+    const result = await loginWithPassword(email.trim(), password);
+    if (!result.success) {
+      setError(result.error ?? 'Error al iniciar sesión.');
       setIsLoading(false);
+      return;
     }
+    if (result.redirectTo) {
+      window.location.href = result.redirectTo;
+      return;
+    }
+    setIsLoading(false);
   };
 
   return (

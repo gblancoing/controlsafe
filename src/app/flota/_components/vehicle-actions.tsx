@@ -51,7 +51,7 @@ export function VehicleActions({ vehicle }: { vehicle: Vehicle }) {
             description: 'El vehículo ha sido eliminado correctamente.',
           });
           router.refresh();
-        }, 100);
+        }, 150);
       } else {
         toast({
           title: 'Error',

@@ -74,7 +74,7 @@ export function AddVehicleTypeButton() {
           description: '',
           isActive: true,
         });
-        router.refresh();
+        setTimeout(() => router.refresh(), 150);
       } else {
         toast({
           title: 'Error',

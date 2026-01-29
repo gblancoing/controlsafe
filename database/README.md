@@ -105,6 +105,43 @@ Esto abrirá una interfaz web en http://localhost:5555 donde podrás ver y edita
 3. **Charset**: El esquema usa `utf8mb4` para soportar emojis y caracteres especiales
 4. **Backup**: Siempre haz backup antes de ejecutar migraciones en producción
 
+### Script SQL: Tipos de desviación (Revisar Control Preventivo)
+
+Para la funcionalidad **Desviaciones detectadas** en el formulario Revisar Control Preventivo, hay que crear las tablas `deviation_types` y `review_deviations` y cargar las causas predefinidas.
+
+**Ejecutar en local y en producción** (MySQL):
+
+```bash
+# Desde la raíz del proyecto, con MySQL en PATH:
+mysql -u root -p controlsafe < database/add-deviation-types-tables.sql
+```
+
+O bien: abrir phpMyAdmin / MySQL Workbench, seleccionar la base `controlsafe`, y ejecutar el contenido de `database/add-deviation-types-tables.sql`.
+
+El script crea las tablas (si no existen) e inserta las 10 causas predefinidas solo cuando la tabla está vacía.
+
+**Tabla Check List de revisión**: Para que los ítems del "Check List de Revisión" (Tipo 1) se gestionen desde Configuración, crea la tabla:
+
+```bash
+mysql -u root -p controlsafe < database/add-review-checklist-types-table.sql
+```
+
+**Columna "Activo" (is_verification_check) en deviation_types**: Si la tabla `deviation_types` ya existe y quieres añadir la columna para que cada causa pueda activarse/desactivarse en el formulario, ejecuta:
+
+```bash
+mysql -u root -p controlsafe < database/add-deviation-type-verification-check.sql
+```
+
+### Script SQL: Rol Super Admin
+
+Para habilitar el rol **Super Admin** (acceso total a todos los proyectos y empresas), ejecutar en MySQL:
+
+```bash
+mysql -u root -p controlsafe < database/add-super-admin-role.sql
+```
+
+O en phpMyAdmin/MySQL Workbench: ejecutar el contenido de `database/add-super-admin-role.sql`. Esto agrega el valor `SuperAdmin` al enum de la columna `role` en la tabla `users`.
+
 ## 🐛 Solución de Problemas
 
 ### Error: "Can't connect to MySQL server"

@@ -105,7 +105,7 @@ export function AssignVehiclesDialog({
         });
         setSelectedVehicleId('');
         loadData();
-        router.refresh();
+        setTimeout(() => router.refresh(), 150);
       } else {
         toast({
           title: 'Error',
@@ -125,7 +125,7 @@ export function AssignVehiclesDialog({
           description: 'El vehículo ha sido desasignado correctamente.',
         });
         loadData();
-        router.refresh();
+        setTimeout(() => router.refresh(), 150);
       } else {
         toast({
           title: 'Error',

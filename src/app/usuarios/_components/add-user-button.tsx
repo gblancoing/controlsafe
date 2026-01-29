@@ -27,8 +27,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { createUser, getAllCompanies, getAllProjects } from '../actions';
 import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
 
 export function AddUserButton() {
   const router = useRouter();
@@ -72,45 +70,29 @@ export function AddUserButton() {
       setError('El nombre, email y rol son obligatorios.');
       return;
     }
-
-    if (selectedRole === 'Driver' && (!companyId || companyId === '__none__')) {
-      setError('Los choferes deben pertenecer a una empresa.');
+    if (!password || password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    if (!companyId || companyId === '__none__') {
+      setError('Debe seleccionar una empresa.');
+      return;
+    }
+    if (!projectId || projectId === '__none__') {
+      setError('Debe seleccionar un proyecto.');
       return;
     }
 
-    // Normalizar companyId: si es "__none__" o vacío, usar undefined
-    const finalCompanyId = companyId && companyId !== '__none__' ? companyId : undefined;
-    // Normalizar projectId: si es "__none__" o vacío, usar undefined
-    const finalProjectId = projectId && projectId !== '__none__' ? projectId : undefined;
+    const finalCompanyId = companyId;
+    const finalProjectId = projectId;
 
     startTransition(async () => {
-      // Primero crear el usuario en Firebase Authentication
-      try {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } catch (firebaseError: any) {
-        if (firebaseError?.code === 'auth/email-already-in-use') {
-          setError(`El email "${email}" ya está registrado en el sistema.`);
-          return;
-        } else if (firebaseError?.code === 'auth/weak-password') {
-          setError('La contraseña es muy débil. Use al menos 6 caracteres.');
-          return;
-        } else if (firebaseError?.code === 'auth/invalid-email') {
-          setError('El email proporcionado no es válido.');
-          return;
-        } else {
-          // Si Firebase no está configurado, continuar de todas formas
-          console.warn('Error al crear usuario en Firebase (puede que no esté configurado):', firebaseError);
-          // Continuar con la creación en la base de datos
-        }
-      }
-
-      // Luego crear el usuario en la base de datos
       const result = await createUser({
         name,
         email,
         password,
         phone: phone || undefined,
-        role: selectedRole as 'Administrator' | 'Supervisor' | 'Technician' | 'Driver',
+        role: selectedRole as 'SuperAdmin' | 'Administrator' | 'Supervisor' | 'Technician' | 'Driver',
         canDrive,
         isActive,
         companyId: finalCompanyId,
@@ -126,7 +108,7 @@ export function AddUserButton() {
             description: `El usuario ${name} ha sido registrado con éxito.`,
           });
           router.refresh();
-        }, 100);
+        }, 150);
       }
     });
   };
@@ -220,6 +202,7 @@ export function AddUserButton() {
                   <SelectValue placeholder="Seleccione un rol" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="SuperAdmin">Super Admin</SelectItem>
                   <SelectItem value="Administrator">Administrador</SelectItem>
                   <SelectItem value="Supervisor">Supervisor</SelectItem>
                   <SelectItem value="Technician">Técnico</SelectItem>
@@ -249,23 +232,16 @@ export function AddUserButton() {
                 </Label>
               </div>
             </div>
-            {/* Campo de Empresa - siempre visible */}
+            {/* Empresa y Proyecto obligatorios */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="companyId" className="text-right">
-                Empresa {role === 'Driver' ? '' : '(Opcional)'}
+                Empresa
               </Label>
-              <Select name="companyId" required={role === 'Driver'}>
+              <Select name="companyId" required>
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder={
-                    role === 'Driver' 
-                      ? "Seleccione una empresa" 
-                      : "Seleccione una empresa (opcional)"
-                  } />
+                  <SelectValue placeholder="Seleccione una empresa" />
                 </SelectTrigger>
                 <SelectContent>
-                  {role !== 'Driver' && (
-                    <SelectItem value="__none__">Sin empresa</SelectItem>
-                  )}
                   {companies.map((company) => (
                     <SelectItem key={company.id} value={company.id}>
                       {company.name}
@@ -274,17 +250,15 @@ export function AddUserButton() {
                 </SelectContent>
               </Select>
             </div>
-            {/* Campo de Proyecto - siempre visible */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="projectId" className="text-right">
-                Proyecto (Opcional)
+                Proyecto
               </Label>
-              <Select name="projectId">
+              <Select name="projectId" required>
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Seleccione un proyecto (opcional)" />
+                  <SelectValue placeholder="Seleccione un proyecto" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">Sin proyecto</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}

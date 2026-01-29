@@ -110,7 +110,7 @@ export function EditProgramDialog({
             description: `El programa "${name}" ha sido actualizado con éxito.`,
           });
           router.refresh();
-        }, 100);
+        }, 150);
       }
     });
   };

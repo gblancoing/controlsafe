@@ -83,8 +83,8 @@ export function AddProjectButton() {
           title: 'Proyecto Creado',
           description: `El proyecto ${name} ha sido creado con éxito.`,
         });
-        router.refresh();
         setOpen(false);
+        setTimeout(() => router.refresh(), 150);
       }
     });
   };

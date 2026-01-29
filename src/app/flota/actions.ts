@@ -5,6 +5,8 @@ import type { Vehicle } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { calculateNextDueDate } from '@/lib/date-utils';
+import fs from 'fs';
+import path from 'path';
 
 // Schema de validación
 const createVehicleSchema = z.object({
@@ -21,15 +23,19 @@ const createVehicleSchema = z.object({
   companyId: z.string().optional(),
   driverId: z.string().optional(), // ID del chofer asignado
   isOperational: z.boolean().optional().default(true),
-  technicalReviewDate: z.date().optional(),
-  technicalReviewExpiryDate: z.date().optional(),
+  technicalReviewDate: z.date().nullable().optional(),
+  technicalReviewExpiryDate: z.date().nullable().optional(),
   circulationPermitStatus: z.enum(['Vigente', 'Vencido', 'Pendiente']).optional(),
 });
 
-// Obtener todos los vehículos
+// Obtener todos los vehículos (filtrados por alcance: SuperAdmin todos; Admin del proyecto; resto de su empresa)
 export async function getVehicles(): Promise<Vehicle[] | null> {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const where = allowedIds === null ? {} : { companyId: { in: allowedIds } };
     const vehicles = await prisma.vehicle.findMany({
+      where,
       include: {
         company: true,
       },
@@ -71,6 +77,10 @@ export async function getVehicleById(id: string): Promise<{
   site: string;
   companyId?: string;
   companyName?: string;
+  technicalReviewDate?: Date;
+  technicalReviewExpiryDate?: Date;
+  circulationPermitStatus?: string;
+  documents?: Array<{ id: string; type: string; url: string; fileName?: string; caption?: string }>;
   maintenancePrograms?: Array<{
     id: string;
     name: string;
@@ -85,6 +95,7 @@ export async function getVehicleById(id: string): Promise<{
       where: { id },
       include: {
         company: true,
+        documents: { orderBy: { order: 'asc' } },
         assignedPrograms: {
           include: {
             program: {
@@ -117,6 +128,16 @@ export async function getVehicleById(id: string): Promise<{
       site: vehicle.site,
       companyId: vehicle.companyId || undefined,
       companyName: vehicle.company?.name || undefined,
+      technicalReviewDate: vehicle.technicalReviewDate || undefined,
+      technicalReviewExpiryDate: vehicle.technicalReviewExpiryDate || undefined,
+      circulationPermitStatus: vehicle.circulationPermitStatus || undefined,
+      documents: vehicle.documents?.map((d) => ({
+        id: d.id,
+        type: d.type,
+        url: d.url,
+        fileName: d.fileName || undefined,
+        caption: d.caption || undefined,
+      })),
       maintenancePrograms: vehicle.assignedPrograms.map((vp) => ({
         id: vp.program.id,
         name: vp.program.name,
@@ -136,10 +157,14 @@ export async function getVehicleById(id: string): Promise<{
   }
 }
 
-// Obtener todas las empresas (para select)
+// Obtener todas las empresas (para select), filtradas por alcance
 export async function getAllCompanies() {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const where = allowedIds === null ? {} : { id: { in: allowedIds } };
     const companies = await prisma.company.findMany({
+      where,
       orderBy: { name: 'asc' },
     });
 
@@ -194,10 +219,13 @@ type CreateVehicleInput = {
   site?: string;
   companyId?: string;
   driverId?: string; // ID del chofer asignado
+  technicalReviewDate?: Date | null;
+  technicalReviewExpiryDate?: Date | null;
+  circulationPermitStatus?: 'Vigente' | 'Vencido' | 'Pendiente';
 };
 
-// Crear un nuevo vehículo
-export async function createVehicle(input: CreateVehicleInput): Promise<{ success: boolean; error?: string }> {
+// Crear un nuevo vehículo (devuelve vehicleId en éxito para poder subir documentos)
+export async function createVehicle(input: CreateVehicleInput): Promise<{ success: boolean; error?: string; vehicleId?: string }> {
   try {
     // Debug: verificar qué está llegando
     console.log('createVehicle recibió:', input);
@@ -302,7 +330,7 @@ export async function createVehicle(input: CreateVehicleInput): Promise<{ succes
     });
 
     revalidatePath('/flota');
-    return { success: true };
+    return { success: true, vehicleId };
   } catch (error: any) {
     console.error('Error creating vehicle:', error);
     if (error instanceof z.ZodError) {
@@ -318,6 +346,110 @@ export async function createVehicle(input: CreateVehicleInput): Promise<{ succes
     // Mostrar el mensaje de error específico si está disponible
     const errorMessage = error.message || 'No se pudo crear el vehículo. Intente nuevamente.';
     return { success: false, error: errorMessage };
+  }
+}
+
+/** Sube documentos de un vehículo (llamar después de createVehicle con el vehicleId devuelto). */
+export async function uploadVehicleDocuments(
+  vehicleId: string,
+  formData: FormData
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { id: true },
+    });
+    if (!vehicle) {
+      return { success: false, error: 'Vehículo no encontrado.' };
+    }
+
+    const files = formData.getAll('documents') as File[];
+    if (!files?.length) {
+      return { success: true };
+    }
+
+    const baseDir = path.join(process.cwd(), 'public', 'uploads', 'vehicles', vehicleId);
+    if (!fs.existsSync(baseDir)) {
+      fs.mkdirSync(baseDir, { recursive: true });
+    }
+
+    const mimeToExt: Record<string, string> = {
+      'application/pdf': 'pdf',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'application/msword': 'doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    };
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file?.name || file.size === 0) continue;
+
+      const ext = mimeToExt[file.type] || path.extname(file.name).slice(1) || 'bin';
+      const safeName = `${Date.now()}-${i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`.slice(0, 180);
+      const fileName = safeName.endsWith(`.${ext}`) ? safeName : `${safeName}.${ext}`;
+      const filePath = path.join(baseDir, fileName);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      fs.writeFileSync(filePath, buffer);
+
+      const url = `/uploads/vehicles/${vehicleId}/${fileName}`;
+      const docId = `vd-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 9)}`;
+      await prisma.vehicleDocument.create({
+        data: {
+          id: docId,
+          vehicleId,
+          type: 'other',
+          url,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || undefined,
+          order: i,
+        },
+      });
+    }
+
+    revalidatePath('/flota');
+    revalidatePath(`/flota/${vehicleId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error uploading vehicle documents:', error);
+    return { success: false, error: error.message || 'No se pudieron subir los documentos.' };
+  }
+}
+
+/** Elimina un documento de un vehículo (y el archivo en disco si existe). */
+export async function deleteVehicleDocument(
+  docId: string,
+  vehicleId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const doc = await prisma.vehicleDocument.findFirst({
+      where: { id: docId, vehicleId },
+    });
+    if (!doc) {
+      return { success: false, error: 'Documento no encontrado.' };
+    }
+    const baseDir = path.join(process.cwd(), 'public', 'uploads', 'vehicles', vehicleId);
+    const fileSegment = doc.url.split('/').pop();
+    if (fileSegment) {
+      const filePath = path.join(baseDir, fileSegment);
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch (e) {
+          console.warn('No se pudo eliminar el archivo físico:', filePath, e);
+        }
+      }
+    }
+    await prisma.vehicleDocument.delete({ where: { id: docId } });
+    revalidatePath('/flota');
+    revalidatePath(`/flota/${vehicleId}`);
+    revalidatePath(`/flota/${vehicleId}/ficha`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error deleting vehicle document:', error);
+    return { success: false, error: error.message || 'No se pudo eliminar el documento.' };
   }
 }
 
@@ -353,14 +485,19 @@ export async function updateVehicle(
         model: validated.model || null,
         year: validated.year || null,
         status: validated.status || 'Operational',
-        mileage: validated.mileage || 0,
-        operatingHours: validated.operatingHours || 0,
-        site: validated.site || '',
+        mileage: validated.mileage ?? undefined,
+        operatingHours: validated.operatingHours ?? undefined,
+        site: validated.site ?? undefined,
         companyId: validated.companyId || null,
+        ...(validated.technicalReviewDate !== undefined && { technicalReviewDate: validated.technicalReviewDate }),
+        ...(validated.technicalReviewExpiryDate !== undefined && { technicalReviewExpiryDate: validated.technicalReviewExpiryDate }),
+        ...(validated.circulationPermitStatus !== undefined && { circulationPermitStatus: validated.circulationPermitStatus }),
       },
     });
 
     revalidatePath('/flota');
+    revalidatePath(`/flota/${id}`);
+    revalidatePath(`/flota/${id}/ficha`);
     return { success: true };
   } catch (error: any) {
     console.error('Error updating vehicle:', error);

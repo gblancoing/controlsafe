@@ -36,6 +36,7 @@ type ReviewHistoryItem = {
     url: string;
     caption?: string;
   }>;
+  deviations?: Array<{ id: string; name: string }>;
 };
 
 export function ReviewHistoryCard({ vehicleId }: { vehicleId: string }) {
@@ -188,6 +189,19 @@ export function ReviewHistoryCard({ vehicleId }: { vehicleId: string }) {
                       ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {review.deviations && review.deviations.length > 0 && (
+              <div>
+                <p className="text-sm font-medium mb-2">Desviaciones detectadas:</p>
+                <div className="flex flex-wrap gap-2">
+                  {review.deviations.map((d) => (
+                    <Badge key={d.id} variant="outline" className="text-xs">
+                      {d.name}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             )}
 

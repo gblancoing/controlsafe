@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NotificationSettings } from './_components/notification-settings';
 import { BulkMessageSender } from './_components/bulk-message-sender';
+import { DeviationTypesSettings } from './_components/deviation-types-settings';
+import { InformacionApp } from './_components/informacion-app';
 import { getNotificationPolicies } from './actions';
 
 export default async function ConfiguracionPage() {
@@ -21,20 +23,28 @@ export default async function ConfiguracionPage() {
             <CardHeader>
               <CardTitle>Configuración</CardTitle>
               <CardDescription>
-                Configura las políticas de notificación y envía mensajes masivos a usuarios y empresas.
+                Configura las políticas de notificación, causas de desviación en controles preventivos, mensajes masivos e información de la app.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="notificaciones" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="notificaciones">Políticas de Notificación</TabsTrigger>
+                  <TabsTrigger value="desviaciones">Tipos de desviación</TabsTrigger>
                   <TabsTrigger value="mensajes">Mensajes Masivos</TabsTrigger>
+                  <TabsTrigger value="informacion">Información App</TabsTrigger>
                 </TabsList>
                 <TabsContent value="notificaciones" className="mt-6">
                   <NotificationSettings initialPolicies={policies} />
                 </TabsContent>
+                <TabsContent value="desviaciones" className="mt-6">
+                  <DeviationTypesSettings />
+                </TabsContent>
                 <TabsContent value="mensajes" className="mt-6">
                   <BulkMessageSender />
+                </TabsContent>
+                <TabsContent value="informacion" className="mt-6">
+                  <InformacionApp />
                 </TabsContent>
               </Tabs>
             </CardContent>

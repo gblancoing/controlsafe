@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { calculateNextDueDate } from '@/lib/date-utils';
+import fs from 'fs';
+import path from 'path';
 
 // Schema de validación para crear una revisión
 const createReviewSchema = z.object({
@@ -25,6 +27,7 @@ const createReviewSchema = z.object({
     order: z.number().int(),
   })),
   photoUrls: z.array(z.string()).optional(),
+  selectedDeviationTypeIds: z.array(z.string()).optional(),
 });
 
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
@@ -214,6 +217,17 @@ export async function createPreventiveControlReview(
         });
       }
 
+      // Crear desviaciones seleccionadas
+      if (validated.selectedDeviationTypeIds && validated.selectedDeviationTypeIds.length > 0) {
+        await (tx as any).reviewDeviation.createMany({
+          data: validated.selectedDeviationTypeIds.map((deviationTypeId) => ({
+            id: `rd-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            reviewId: review.id,
+            deviationTypeId,
+          })),
+        });
+      }
+
       // Procesar según el estado de la revisión
       if (validated.status === 'Approved') {
         // Aprobar: Resetear el control preventivo desde la fecha de revisión
@@ -361,6 +375,70 @@ export async function createPreventiveControlReview(
   }
 }
 
+/** Sube fotos de una revisión (llamar después de createPreventiveControlReview con el reviewId devuelto). */
+export async function uploadReviewPhotos(
+  reviewId: string,
+  formData: FormData
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const review = await (prisma as any).preventiveControlReview.findUnique({
+      where: { id: reviewId },
+      select: { id: true, vehicleId: true },
+    });
+    if (!review) {
+      return { success: false, error: 'Revisión no encontrada.' };
+    }
+
+    const files = formData.getAll('photos') as File[];
+    if (!files?.length) {
+      return { success: true };
+    }
+
+    const baseDir = path.join(process.cwd(), 'public', 'uploads', 'reviews', reviewId);
+    if (!fs.existsSync(baseDir)) {
+      fs.mkdirSync(baseDir, { recursive: true });
+    }
+
+    const mimeToExt: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file?.name || file.size === 0) continue;
+
+      const ext = mimeToExt[file.type] || path.extname(file.name).slice(1) || 'jpg';
+      const safeName = `${Date.now()}-${i}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`.slice(0, 180);
+      const fileName = safeName.endsWith(`.${ext}`) ? safeName : `${safeName}.${ext}`;
+      const filePath = path.join(baseDir, fileName);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      fs.writeFileSync(filePath, buffer);
+
+      const url = `/uploads/reviews/${reviewId}/${fileName}`;
+      const photoId = `rp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 9)}`;
+      await (prisma as any).reviewPhoto.create({
+        data: {
+          id: photoId,
+          reviewId,
+          url,
+          order: i,
+        },
+      });
+    }
+
+    revalidatePath('/torque');
+    revalidatePath(`/flota/${review.vehicleId}`);
+    revalidatePath(`/flota/${review.vehicleId}/ficha`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error uploading review photos:', error);
+    return { success: false, error: error.message || 'No se pudieron subir las fotografías.' };
+  }
+}
+
 // Obtener historial de revisiones de un vehículo (todas las revisiones)
 export async function getVehicleReviewHistory(vehicleId: string) {
   try {
@@ -386,6 +464,11 @@ export async function getVehicleReviewHistory(vehicleId: string) {
         },
         photos: {
           orderBy: { order: 'asc' },
+        },
+        deviations: {
+          include: {
+            deviationType: { select: { id: true, name: true } },
+          },
         },
         vehicleMaintenanceProgram: {
           include: {
@@ -430,6 +513,10 @@ export async function getVehicleReviewHistory(vehicleId: string) {
         url: photo.url,
         caption: photo.caption || undefined,
       })),
+      deviations: (review.deviations || []).map((d: any) => ({
+        id: d.deviationType?.id,
+        name: d.deviationType?.name,
+      })),
     }));
   } catch (error) {
     console.error('Error fetching vehicle review history:', error);
@@ -463,6 +550,11 @@ export async function getControlReviewHistory(vehicleMaintenanceProgramId: strin
         photos: {
           orderBy: { order: 'asc' },
         },
+        deviations: {
+          include: {
+            deviationType: { select: { id: true, name: true } },
+          },
+        },
       },
       orderBy: { reviewDate: 'desc' },
     });
@@ -494,6 +586,10 @@ export async function getControlReviewHistory(vehicleMaintenanceProgramId: strin
         id: photo.id,
         url: photo.url,
         caption: photo.caption || undefined,
+      })),
+      deviations: (review.deviations || []).map((d: any) => ({
+        id: d.deviationType?.id,
+        name: d.deviationType?.name,
       })),
     }));
   } catch (error) {

@@ -47,22 +47,22 @@ export type PendingControl = {
   status: 'pending' | 'due' | 'overdue';
 };
 
-// Obtener historial de revisiones con filtros
+// Obtener historial de revisiones con filtros (por defecto aplica alcance del usuario)
 export async function getHistoryReviews(
   companyId?: string,
   projectId?: string
 ): Promise<HistoryReview[]> {
   try {
-    // Construir filtros para vehículos
     const vehicleWhere: any = {};
-    
     if (companyId) {
       vehicleWhere.companyId = companyId;
+    } else {
+      const { getAllowedCompanyIds } = await import('@/lib/scope');
+      const allowedIds = await getAllowedCompanyIds();
+      if (allowedIds !== null && allowedIds.length > 0) {
+        vehicleWhere.companyId = { in: allowedIds };
+      }
     }
-
-    // Si hay proyecto, necesitamos filtrar por usuarios del proyecto
-    // Por ahora, filtramos solo por empresa ya que los vehículos están asociados a empresas
-    // TODO: Agregar relación vehículo-proyecto si es necesario
 
     const reviews = await (prisma.preventiveControlReview.findMany as any)({
       where: {
@@ -144,16 +144,103 @@ export async function getHistoryReviews(
   }
 }
 
-// Obtener programación pendiente con filtros
+/** Detalle completo de una revisión (para ver registro y generar PDF) */
+export type ReviewDetail = HistoryReview & {
+  checklistItems: Array< { id: string; item: string; checked: boolean; notes?: string; order: number } >;
+  deviations: Array< { id: string; name: string } >;
+  photos: Array< { id: string; url: string; caption?: string; order: number } >;
+};
+
+/** Obtener una revisión por ID con checklist, desviaciones y fotos (para detalle y PDF) */
+export async function getReviewById(reviewId: string): Promise<ReviewDetail | null> {
+  try {
+    const review = await (prisma.preventiveControlReview.findUnique as any)({
+      where: { id: reviewId },
+      include: {
+        vehicle: {
+          include: {
+            company: { select: { id: true, name: true } },
+          },
+        },
+        vehicleMaintenanceProgram: {
+          include: {
+            program: { select: { id: true, name: true, description: true } },
+          },
+        },
+        reviewer: { select: { id: true, name: true } },
+        driver: { select: { id: true, name: true } },
+        checklistItems: { orderBy: { order: 'asc' } },
+        photos: { orderBy: { order: 'asc' } },
+        deviations: {
+          include: {
+            deviationType: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    if (!review) return null;
+
+    return {
+      id: review.id,
+      reviewDate: review.reviewDate,
+      status: review.status,
+      observations: review.observations || undefined,
+      urgentRejectionReason: review.urgentRejectionReason || undefined,
+      requiredActions: review.requiredActions || undefined,
+      vehicle: {
+        id: review.vehicle.id,
+        name: review.vehicle.name,
+        patent: review.vehicle.patent || undefined,
+        companyId: review.vehicle.companyId || undefined,
+        companyName: review.vehicle.company?.name || undefined,
+      },
+      program: {
+        id: review.vehicleMaintenanceProgram.program.id,
+        name: review.vehicleMaintenanceProgram.program.name,
+        description: review.vehicleMaintenanceProgram.program.description || undefined,
+      },
+      reviewer: { id: review.reviewer.id, name: review.reviewer.name },
+      driver: review.driver ? { id: review.driver.id, name: review.driver.name } : undefined,
+      checklistItems: (review.checklistItems || []).map((item: any) => ({
+        id: item.id,
+        item: item.item,
+        checked: item.checked,
+        notes: item.notes || undefined,
+        order: item.order ?? 0,
+      })),
+      deviations: (review.deviations || []).map((d: any) => ({
+        id: d.deviationType?.id,
+        name: d.deviationType?.name ?? 'Desconocido',
+      })),
+      photos: (review.photos || []).map((p: any) => ({
+        id: p.id,
+        url: p.url,
+        caption: p.caption || undefined,
+        order: p.order ?? 0,
+      })),
+    };
+  } catch (error) {
+    console.error('Error fetching review by id:', error);
+    return null;
+  }
+}
+
+// Obtener programación pendiente con filtros (por defecto aplica alcance del usuario)
 export async function getPendingControls(
   companyId?: string,
   projectId?: string
 ): Promise<PendingControl[]> {
   try {
     const vehicleWhere: any = {};
-    
     if (companyId) {
       vehicleWhere.companyId = companyId;
+    } else {
+      const { getAllowedCompanyIds } = await import('@/lib/scope');
+      const allowedIds = await getAllowedCompanyIds();
+      if (allowedIds !== null && allowedIds.length > 0) {
+        vehicleWhere.companyId = { in: allowedIds };
+      }
     }
 
     const assignments = await (prisma.vehicleMaintenanceProgram.findMany as any)({
@@ -250,10 +337,14 @@ export async function getPendingControls(
   }
 }
 
-// Obtener todas las empresas (para filtro)
+// Obtener todas las empresas (para filtro), filtradas por alcance
 export async function getAllCompanies() {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const where = allowedIds === null ? {} : { id: { in: allowedIds } };
     const companies = await prisma.company.findMany({
+      where,
       orderBy: { name: 'asc' },
       select: {
         id: true,
@@ -267,10 +358,14 @@ export async function getAllCompanies() {
   }
 }
 
-// Obtener todos los proyectos (para filtro)
+// Obtener todos los proyectos (para filtro), filtrados por alcance
 export async function getAllProjects() {
   try {
+    const { getAllowedProjectIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedProjectIds();
+    const where = allowedIds === null ? {} : { id: { in: allowedIds } };
     const projects = await prisma.project.findMany({
+      where,
       orderBy: { name: 'asc' },
       select: {
         id: true,

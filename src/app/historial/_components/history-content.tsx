@@ -20,9 +20,10 @@ import {
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { X, Eye, FileDown } from 'lucide-react';
 import type { HistoryReview } from '../actions';
 import { format } from 'date-fns';
+import { ReviewDetailDialog } from './review-detail-dialog';
 
 type HistoryContentProps = {
   reviews: HistoryReview[];
@@ -42,6 +43,8 @@ export function HistoryContent({
   const router = useRouter();
   const [selectedCompany, setSelectedCompany] = useState<string>(initialCompanyId || '__all__');
   const [selectedProject, setSelectedProject] = useState<string>(initialProjectId || '__all__');
+  const [detailReviewId, setDetailReviewId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const handleFilterChange = (type: 'company' | 'project', value: string) => {
     const params = new URLSearchParams();
@@ -161,6 +164,7 @@ export function HistoryContent({
                 <TableHead>Revisor</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Observaciones</TableHead>
+                <TableHead className="text-right w-[180px]">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -179,12 +183,51 @@ export function HistoryContent({
                   <TableCell className="max-w-xs truncate">
                     {review.observations || '-'}
                   </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 h-8"
+                        onClick={() => {
+                          setDetailReviewId(review.id);
+                          setDetailOpen(true);
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                        Ver registro
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 h-8"
+                        asChild
+                      >
+                        <a
+                          href={`/api/historial/revision/${review.id}/pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                        >
+                          <FileDown className="h-4 w-4" />
+                          PDF
+                        </a>
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
       )}
+
+      <ReviewDetailDialog
+        reviewId={detailReviewId}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        baseUrl={typeof window !== 'undefined' ? window.location.origin : ''}
+      />
     </div>
   );
 }

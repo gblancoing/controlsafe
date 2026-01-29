@@ -8,6 +8,10 @@ function createTransporter() {
   const port = parseInt(process.env.SMTP_PORT || '587');
   const user = process.env.SMTP_USER;
   const password = process.env.SMTP_PASSWORD;
+  // cPanel "Secure SSL/TLS" suele usar puerto 465 (SMTPS). 587 es para STARTTLS.
+  const secure = process.env.SMTP_SECURE !== undefined
+    ? process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === '1'
+    : port === 465;
 
   if (!host || !user || !password) {
     throw new Error('Configuración SMTP incompleta. Verifica las variables de entorno SMTP_HOST, SMTP_USER y SMTP_PASSWORD');
@@ -16,7 +20,7 @@ function createTransporter() {
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465, // true para 465, false para otros puertos
+    secure,
     auth: {
       user,
       pass: password,
@@ -50,7 +54,11 @@ export async function sendEmail(
     }
 
     const transporter = createTransporter();
-    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+    const fromName = process.env.SMTP_FROM || 'ControlSafe';
+    const fromEmail = process.env.SMTP_USER || '';
+    const from = fromEmail && !fromName.includes('@')
+      ? `"${fromName.replace(/"/g, '')}" <${fromEmail}>`
+      : (fromName.includes('@') ? fromName : fromEmail);
 
     await transporter.sendMail({
       from,

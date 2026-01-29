@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -29,6 +30,7 @@ import { createCompany } from '../actions';
 import type { CompanyType } from '@/lib/types';
 
 export function AddCompanyButton() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +59,7 @@ export function AddCompanyButton() {
           description: `La empresa ${name} ha sido creada con éxito.`,
         });
         setOpen(false);
+        setTimeout(() => router.refresh(), 150);
       }
     });
   };

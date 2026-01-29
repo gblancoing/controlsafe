@@ -2,7 +2,7 @@ export type User = {
   id: string;
   name: string;
   email: string;
-  role: 'Administrator' | 'Supervisor' | 'Technician' | 'Driver';
+  role: 'SuperAdmin' | 'Administrator' | 'Supervisor' | 'Technician' | 'Driver';
   avatarUrl?: string;
 };
 

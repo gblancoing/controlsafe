@@ -6,6 +6,8 @@ import { getCompanies } from './actions';
 import { CompaniesTable } from './_components/companies-table';
 import { AddCompanyButton } from './_components/add-company-button';
 
+export const dynamic = 'force-dynamic';
+
 export default async function EmpresasPage() {
   const companies = await getCompanies();
 

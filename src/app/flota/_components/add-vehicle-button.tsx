@@ -25,7 +25,7 @@ import { PlusCircle, Loader, Upload, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
-import { createVehicle, getAllCompanies, getDriversByCompany } from '../actions';
+import { createVehicle, uploadVehicleDocuments, getAllCompanies, getDriversByCompany } from '../actions';
 import { getActiveVehicleTypes } from '../tipos/actions';
 import { useRouter } from 'next/navigation';
 import type { Vehicle } from '@/lib/types';
@@ -63,8 +63,12 @@ export function AddVehicleButton() {
       setCirculationPermitStatus('');
       setSelectedFiles([]);
       setDrivers([]);
-      const companiesList = await getAllCompanies();
+      const [companiesList, typesList] = await Promise.all([
+        getAllCompanies(),
+        getActiveVehicleTypes(),
+      ]);
       setCompanies(companiesList);
+      setVehicleTypes(typesList.map((t) => ({ id: t.id, name: t.name, displayName: t.displayName })));
     }
   };
 
@@ -177,16 +181,26 @@ export function AddVehicleButton() {
       if (result.error) {
         setError(result.error);
       } else {
-        // Cerrar el diálogo primero
+        if (result.vehicleId && selectedFiles.length > 0) {
+          const docFormData = new FormData();
+          selectedFiles.forEach((file) => docFormData.append('documents', file));
+          const uploadResult = await uploadVehicleDocuments(result.vehicleId, docFormData);
+          if (uploadResult.error) {
+            toast({
+              title: 'Vehículo creado, documentos con error',
+              description: uploadResult.error,
+              variant: 'destructive',
+            });
+          }
+        }
         setOpen(false);
-        // Esperar un momento para que el diálogo se cierre completamente
         setTimeout(() => {
           toast({
             title: 'Vehículo Registrado',
             description: `El vehículo ${vehicleName} ha sido registrado con éxito.`,
           });
           router.refresh();
-        }, 100);
+        }, 150);
       }
     });
   };

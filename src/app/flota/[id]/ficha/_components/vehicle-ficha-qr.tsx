@@ -6,9 +6,9 @@ export function VehicleFichaQR({ vehicleId }: { vehicleId: string }) {
   const [qrUrl, setQrUrl] = useState<string>('');
 
   useEffect(() => {
-    // Generar URL para el QR
+    // URL pública: sin login, solo la ficha
     const baseUrl = window.location.origin;
-    const url = `${baseUrl}/flota/${vehicleId}/ficha`;
+    const url = `${baseUrl}/ficha/${vehicleId}`;
     
     // Usar API pública para generar QR code
     const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(url)}`;

@@ -47,8 +47,16 @@ export type DashboardMetrics = {
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   try {
+    const { getAllowedCompanyIds, getAllowedProjectIds } = await import('@/lib/scope');
+    const allowedCompanyIds = await getAllowedCompanyIds();
+    const allowedProjectIds = await getAllowedProjectIds();
+    const vehicleWhere = allowedCompanyIds === null ? {} : { companyId: { in: allowedCompanyIds } };
+    const companyWhere = allowedCompanyIds === null ? {} : { id: { in: allowedCompanyIds } };
+    const projectWhere = allowedProjectIds === null ? {} : { id: { in: allowedProjectIds } };
+
     // Flota
     const vehicles = await prisma.vehicle.findMany({
+      where: vehicleWhere,
       select: {
         status: true,
         isOperational: true,
@@ -126,6 +134,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
 
     // Revisiones
     const allReviews = await (prisma.preventiveControlReview.findMany as any)({
+      where: { vehicle: vehicleWhere },
       select: {
         status: true,
         reviewDate: true,
@@ -168,6 +177,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
 
     // Empresas
     const companies = await prisma.company.findMany({
+      where: companyWhere,
       include: {
         vehicles: true,
       },
@@ -179,7 +189,9 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     };
 
     // Proyectos
-    const projects = await prisma.project.findMany();
+    const projects = await prisma.project.findMany({
+      where: projectWhere,
+    });
     const projectsStats = {
       total: projects.length,
       active: projects.length, // Por ahora todos son activos
@@ -502,6 +514,105 @@ export async function getTrendsData(): Promise<TrendData[]> {
 }
 
 // ============================================
+// Resumen de Desviaciones (para Panel de Control)
+// ============================================
+const VEHICLE_TYPE_LABELS: Record<string, string> = {
+  Excavator: 'Excavadora',
+  'Haul Truck': 'Camión Minero',
+  HaulTruck: 'Camión Minero',
+  Dozer: 'Topadora',
+  Loader: 'Cargador',
+  Camioneta: 'Camioneta',
+};
+
+export type DeviationsSummary = {
+  totalOccurrences: number;
+  reviewsWithDeviations: number;
+  topCauses: Array<{ name: string; count: number }>;
+  byCompany: Array<{ companyName: string; total: number }>;
+  byVehicleType: Array<{ vehicleTypeLabel: string; total: number }>;
+};
+
+export async function getDeviationsSummary(): Promise<DeviationsSummary> {
+  try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const vehicleWhere = allowedIds === null ? {} : { companyId: { in: allowedIds } };
+    const reviewWhere = allowedIds === null ? {} : { review: { vehicle: vehicleWhere } };
+    const reviewDeviations = await (prisma as any).reviewDeviation.findMany({
+      where: reviewWhere,
+      include: {
+        deviationType: { select: { name: true } },
+        review: {
+          select: {
+            vehicleId: true,
+            vehicle: {
+              select: {
+                type: true,
+                companyId: true,
+                company: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const byTypeMap = new Map<string, number>();
+    const reviewIdsWithDeviations = new Set<string>();
+    const byCompanyMap = new Map<string, number>();
+    const byVehicleTypeMap = new Map<string, number>();
+
+    for (const rd of reviewDeviations) {
+      const name = rd.deviationType?.name || 'Desconocido';
+      byTypeMap.set(name, (byTypeMap.get(name) || 0) + 1);
+      if (rd.reviewId) reviewIdsWithDeviations.add(rd.reviewId);
+
+      const vehicle = rd.review?.vehicle;
+      const companyName = vehicle?.company?.name || 'Sin empresa';
+      byCompanyMap.set(companyName, (byCompanyMap.get(companyName) || 0) + 1);
+
+      const rawType = vehicle?.type ?? 'Otro';
+      const typeKey = String(rawType);
+      const typeLabel = VEHICLE_TYPE_LABELS[typeKey] || typeKey;
+      byVehicleTypeMap.set(typeLabel, (byVehicleTypeMap.get(typeLabel) || 0) + 1);
+    }
+
+    const topCauses = Array.from(byTypeMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const byCompany = Array.from(byCompanyMap.entries())
+      .map(([companyName, total]) => ({ companyName, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    const byVehicleType = Array.from(byVehicleTypeMap.entries())
+      .map(([vehicleTypeLabel, total]) => ({ vehicleTypeLabel, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    return {
+      totalOccurrences: reviewDeviations.length,
+      reviewsWithDeviations: reviewIdsWithDeviations.size,
+      topCauses,
+      byCompany,
+      byVehicleType,
+    };
+  } catch (error) {
+    console.error('Error fetching deviations summary:', error);
+    return {
+      totalOccurrences: 0,
+      reviewsWithDeviations: 0,
+      topCauses: [],
+      byCompany: [],
+      byVehicleType: [],
+    };
+  }
+}
+
+// ============================================
 // Actividad Reciente
 // ============================================
 export type RecentReview = {
@@ -515,7 +626,11 @@ export type RecentReview = {
 
 export async function getRecentReviews(): Promise<RecentReview[]> {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const vehicleWhere = allowedIds === null ? {} : { companyId: { in: allowedIds } };
     const reviews = await (prisma.preventiveControlReview.findMany as any)({
+      where: { vehicle: vehicleWhere },
       include: {
         vehicle: {
           select: {

@@ -62,7 +62,7 @@ export function UserActions({ user }: { user: User }) {
             description: 'El usuario ha sido eliminado correctamente.',
           });
           router.refresh();
-        }, 100);
+        }, 150);
       } else {
         toast({
           title: 'Error',

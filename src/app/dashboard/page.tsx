@@ -7,17 +7,20 @@ import { CriticalAlerts } from '@/components/dashboard/critical-alerts';
 import { DashboardTrends } from '@/components/dashboard/dashboard-trends';
 import { QuickActions } from '@/components/dashboard/quick-actions';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
+import { DeviationsSummaryCard } from '@/components/dashboard/deviations-summary-card';
 import {
   getDashboardMetrics,
   getCriticalAlerts,
   getTrendsData,
+  getDeviationsSummary,
 } from './actions';
 
 export default async function DashboardPage() {
-  const [metrics, alerts, trends] = await Promise.all([
+  const [metrics, alerts, trends, deviationsSummary] = await Promise.all([
     getDashboardMetrics(),
     getCriticalAlerts(),
     getTrendsData(),
+    getDeviationsSummary(),
   ]);
 
   return (
@@ -52,6 +55,7 @@ export default async function DashboardPage() {
               {/* Columna Lateral */}
               <div className="lg:col-span-1 space-y-6">
                 <QuickActions />
+                <DeviationsSummaryCard summary={deviationsSummary} />
                 <DashboardOverview metrics={metrics} />
               </div>
             </div>

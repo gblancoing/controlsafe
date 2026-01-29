@@ -34,6 +34,7 @@ export function ViewUserDialog({
 }) {
   const getRoleLabel = (role: string) => {
     const roleMap: Record<string, string> = {
+      SuperAdmin: 'Super Admin',
       Administrator: 'Administrador',
       Supervisor: 'Supervisor',
       Technician: 'Técnico',
@@ -44,6 +45,7 @@ export function ViewUserDialog({
 
   const getRoleVariant = (role: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (role) {
+      case 'SuperAdmin':
       case 'Administrator':
         return 'destructive';
       case 'Supervisor':

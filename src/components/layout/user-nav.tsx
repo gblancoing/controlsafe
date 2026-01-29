@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,13 +40,15 @@ export function UserNav({ user }: { user: User }) {
           console.warn('Error al cerrar sesión en Firebase:', firebaseError);
         }
       }
-      // Redirigir al login usando la server action
-      await logout();
+      const result = await logout();
+      if (result?.redirectTo) {
+        window.location.href = result.redirectTo;
+        return;
+      }
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
-      // Redirigir de todas formas
-      router.push('/login');
     }
+    router.push('/login');
   };
 
   return (
@@ -76,9 +79,11 @@ export function UserNav({ user }: { user: User }) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
-            <UserIcon className="mr-2 h-4 w-4" />
-            <span>Perfil</span>
+          <DropdownMenuItem asChild>
+            <Link href="/perfil">
+              <UserIcon className="mr-2 h-4 w-4" />
+              <span>Perfil</span>
+            </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

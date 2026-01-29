@@ -1,17 +1,53 @@
 'use server';
 
-import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import crypto from 'crypto';
+import { createSession, destroySession, verifyPassword, hashPassword } from '@/lib/auth';
 
-// Acción para cerrar sesión
-export async function logout() {
-  // Aquí se implementaría la lógica de logout real
-  // Por ejemplo, eliminar cookies, invalidar sesiones de Firebase, etc.
-  
-  // Por ahora, simplemente redirigir al login
-  redirect('/login');
+/** Login con email y contraseña contra MySQL (sin Firebase). Retorna redirectTo para redirigir en cliente y evitar fetch interno a 0.0.0.0:3000 en producción. */
+export async function loginWithPassword(
+  email: string,
+  password: string
+): Promise<{ success: boolean; error?: string; redirectTo?: string }> {
+  try {
+    if (!email?.trim() || !password) {
+      return { success: false, error: 'Ingrese correo y contraseña.' };
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+      select: { id: true, role: true, passwordHash: true, isActive: true },
+    });
+
+    if (!user) {
+      return { success: false, error: 'Correo o contraseña incorrectos.' };
+    }
+    if (!user.isActive) {
+      return { success: false, error: 'Usuario desactivado. Contacte al administrador.' };
+    }
+    if (!user.passwordHash) {
+      return { success: false, error: 'Este usuario no tiene contraseña configurada. Use "¿Olvidaste tu contraseña?".' };
+    }
+
+    const valid = await verifyPassword(password, user.passwordHash);
+    if (!valid) {
+      return { success: false, error: 'Correo o contraseña incorrectos.' };
+    }
+
+    await createSession(user.id, user.role);
+    revalidatePath('/', 'layout');
+    return { success: true, redirectTo: '/dashboard' };
+  } catch (e: any) {
+    console.error('Login error:', e);
+    return { success: false, error: 'Error al iniciar sesión. Inténtelo de nuevo.' };
+  }
+}
+
+// Cerrar sesión (borra cookie; retorna redirectTo para redirigir en cliente)
+export async function logout(): Promise<{ redirectTo: string }> {
+  await destroySession();
+  return { redirectTo: '/login' };
 }
 
 // Solicitar recuperación de contraseña
@@ -169,21 +205,12 @@ export async function resetPassword(token: string, newPassword: string): Promise
       return { success: false, error: 'No se puede restablecer la contraseña de un usuario inactivo.' };
     }
 
-    // Actualizar contraseña en Firebase
-    // Nota: Para resetear contraseña desde el servidor, se necesita Firebase Admin SDK
-    // Alternativamente, se puede usar sendPasswordResetEmail de Firebase Auth
-    // Por ahora, el token se marca como usado y el usuario puede usar el enlace
-    // TODO: Implementar Firebase Admin SDK para resetear contraseña automáticamente
-    console.log('Password reset token validated for:', resetToken.user.email);
-    
-    // Si tienes Firebase Admin SDK configurado, descomenta esto:
-    /*
-    const admin = require('firebase-admin');
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
-    await admin.auth().updateUser(resetToken.user.email, { password: newPassword });
-    */
+    // Actualizar contraseña en MySQL (bcrypt)
+    const hashed = await hashPassword(newPassword);
+    await prisma.user.update({
+      where: { id: resetToken.user.id },
+      data: { passwordHash: hashed },
+    });
 
     // Marcar el token como usado
     await (prisma as any).passwordResetToken.update({

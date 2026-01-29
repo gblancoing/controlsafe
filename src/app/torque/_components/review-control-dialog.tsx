@@ -17,7 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Loader, CheckCircle2, XCircle, AlertTriangle, Camera, Truck, User } from 'lucide-react';
+import { Loader, CheckCircle2, XCircle, AlertTriangle, Camera, Truck, User, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
@@ -26,8 +26,12 @@ import {
   getVehicleAndDriverInfo,
   getProgramChecklist,
   createPreventiveControlReview,
+  uploadReviewPhotos,
   type CreateReviewInput,
 } from '../actions-reviews';
+import { getDeviationTypes } from '../actions-deviations';
+import { getActiveReviewChecklistTypes } from '@/app/configuracion/actions-review-checklist';
+import { getCurrentUserRole } from '@/lib/auth';
 import { getMaintenancePrograms } from '@/app/mantenimiento/actions';
 import {
   Select,
@@ -60,8 +64,24 @@ export function ReviewControlDialog({
   const [requiredActions, setRequiredActions] = useState('');
   const [rejectionRepairProgramId, setRejectionRepairProgramId] = useState<string>('');
   const [selectedAction, setSelectedAction] = useState<'Approved' | 'Rejected' | 'UrgentRejected' | null>(null);
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([]);
+  const [deviationTypes, setDeviationTypes] = useState<{ id: string; name: string; order: number; isVerificationCheck?: boolean }[]>([]);
+  const [selectedDeviationTypeIds, setSelectedDeviationTypeIds] = useState<string[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [reviewDate, setReviewDate] = useState(new Date().toISOString().slice(0, 16));
+
+  // Mantener preview URLs y revocarlos al quitar fotos o cerrar
+  useEffect(() => {
+    const urls = photoFiles.map((f) => URL.createObjectURL(f));
+    setPhotoPreviewUrls((prev) => {
+      prev.forEach((u) => URL.revokeObjectURL(u));
+      return urls;
+    });
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [photoFiles]);
 
   useEffect(() => {
     if (open && control) {
@@ -72,57 +92,48 @@ export function ReviewControlDialog({
       setRequiredActions('');
       setRejectionRepairProgramId('');
       setSelectedAction(null);
-      setPhotos([]);
+      setPhotoFiles([]);
+      setPhotoPreviewUrls([]);
+      setSelectedDeviationTypeIds([]);
       setReviewDate(new Date().toISOString().slice(0, 16));
 
       Promise.all([
         getVehicleAndDriverInfo(control.vehicleId),
         getProgramChecklist(control.programId),
         getMaintenancePrograms(),
-      ]).then(([vehicleData, checklistData, programsData]) => {
+        getDeviationTypes(),
+        getActiveReviewChecklistTypes(),
+        getCurrentUserRole(),
+      ]).then(([vehicleData, checklistData, programsData, deviationsData, reviewChecklistData, role]) => {
         setVehicleInfo(vehicleData);
         setAvailablePrograms(programsData);
-        // Controles predefinidos del checklist
-        const predefinedControls = [
-          'Torque',
-          'Visual',
-          'Luces',
-          'Alarmas',
-          'Antenas',
-          'Equipamiento',
-          'Mecánico',
-          'Otros',
-        ];
-
-        // Crear checklist combinando controles predefinidos y tareas del programa
+        setDeviationTypes((deviationsData || []).filter((d: any) => d.isVerificationCheck === true));
+        setIsAdmin(role === 'Administrator' || role === 'SuperAdmin');
+        // Check List de revisión: ítems activos desde Configuración + tareas del programa
         const checklistItems: any[] = [];
-
-        // Primero agregar los controles predefinidos
-        predefinedControls.forEach((control, index) => {
+        let orderIndex = 0;
+        (reviewChecklistData || []).forEach((r: { id: string; name: string; order: number }) => {
           checklistItems.push({
             programTaskId: undefined,
-            item: control,
+            item: r.name,
             checked: false,
             notes: '',
-            order: index,
+            order: orderIndex++,
             isPredefined: true,
           });
         });
-
-        // Luego agregar las tareas del programa si existen
         if (checklistData && checklistData.tasks.length > 0) {
-          checklistData.tasks.forEach((task: any, index: number) => {
+          checklistData.tasks.forEach((task: any) => {
             checklistItems.push({
               programTaskId: task.id,
               item: task.task,
               checked: false,
               notes: '',
-              order: predefinedControls.length + index,
+              order: orderIndex++,
               isPredefined: false,
             });
           });
         }
-
         setChecklist(checklistItems);
         setLoading(false);
       }).catch((err) => {
@@ -133,30 +144,39 @@ export function ReviewControlDialog({
     }
   }, [open, control]);
 
-  const handleChecklistChange = (index: number, field: 'checked' | 'notes', value: boolean | string) => {
+  const handleChecklistChange = (index: number, field: 'checked' | 'notes' | 'item', value: boolean | string) => {
     const updated = [...checklist];
     updated[index] = { ...updated[index], [field]: value };
     setChecklist(updated);
   };
 
+  const removeChecklistItem = (index: number) => {
+    const item = checklist[index];
+    if (item?.isPredefined || item?.programTaskId) return;
+    setChecklist((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const isCustomChecklistItem = (item: (typeof checklist)[0]) =>
+    !item.isPredefined && !item.programTaskId;
+
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
+    const newFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    setPhotoFiles((prev) => [...prev, ...newFiles]);
+    event.target.value = '';
+  };
 
-    // Por ahora, simulamos URLs. En producción, deberías subir las fotos a un servidor
-    const newPhotos: string[] = [];
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          newPhotos.push(e.target.result as string);
-          if (newPhotos.length === files.length) {
-            setPhotos([...photos, ...newPhotos]);
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+  const removePhoto = (index: number) => {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const toggleDeviation = (deviationTypeId: string) => {
+    setSelectedDeviationTypeIds((prev) =>
+      prev.includes(deviationTypeId)
+        ? prev.filter((id) => id !== deviationTypeId)
+        : [...prev, deviationTypeId]
+    );
   };
 
   const handleSubmit = async (status: 'Approved' | 'Rejected' | 'UrgentRejected') => {
@@ -214,8 +234,11 @@ export function ReviewControlDialog({
       urgentRejectionReason: status === 'UrgentRejected' ? urgentRejectionReason : undefined,
       requiredActions: status === 'UrgentRejected' ? requiredActions : undefined,
       rejectionRepairProgramId: status === 'Rejected' ? rejectionRepairProgramId : undefined,
-      checklistItems: checklist,
-      photoUrls: photos.length > 0 ? photos : undefined,
+      checklistItems: checklist
+        .filter((item) => (item.item || '').trim().length > 0)
+        .map((item, index) => ({ ...item, order: index })),
+      photoUrls: undefined, // Las fotos se suben después con uploadReviewPhotos
+      selectedDeviationTypeIds: selectedDeviationTypeIds.length > 0 ? selectedDeviationTypeIds : undefined,
     };
 
     startTransition(async () => {
@@ -223,6 +246,18 @@ export function ReviewControlDialog({
       if (result.error) {
         setError(result.error);
       } else {
+        if (result.reviewId && photoFiles.length > 0) {
+          const formData = new FormData();
+          photoFiles.forEach((file) => formData.append('photos', file));
+          const uploadResult = await uploadReviewPhotos(result.reviewId, formData);
+          if (uploadResult.error) {
+            toast({
+              title: 'Revisión creada, fotos con error',
+              description: uploadResult.error,
+              variant: 'destructive',
+            });
+          }
+        }
         onOpenChange(false);
         setTimeout(() => {
           toast({
@@ -235,7 +270,7 @@ export function ReviewControlDialog({
                 : 'El control preventivo ha sido rechazado. El vehículo sigue Operativo. Se ha asignado un programa de reparación y ajuste.',
           });
           router.refresh();
-        }, 100);
+        }, 150);
       }
     });
   };
@@ -356,7 +391,12 @@ export function ReviewControlDialog({
 
           {/* Checklist de Revisión */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Check List de Revisión</h3>
+            <div>
+              <h3 className="text-sm font-semibold">Check List de Revisión</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Ítems configurados en Configuración → Tipos de desviación (Tipo 1: Check List de revisión).
+              </p>
+            </div>
             <div className="border rounded-lg p-4">
               {/* Controles en horizontal */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
@@ -369,12 +409,32 @@ export function ReviewControlDialog({
                         handleChecklistChange(index, 'checked', checked === true)
                       }
                     />
-                    <Label
-                      htmlFor={`checklist-${index}`}
-                      className="font-medium cursor-pointer text-sm"
-                    >
-                      {item.item}
-                    </Label>
+                    {isCustomChecklistItem(item) ? (
+                      <div className="flex-1 flex items-center gap-1 min-w-0">
+                        <Input
+                          value={item.item}
+                          onChange={(e) => handleChecklistChange(index, 'item', e.target.value)}
+                          className="h-8 text-sm"
+                          placeholder="Descripción del ítem"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-destructive shrink-0"
+                          onClick={() => removeChecklistItem(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Label
+                        htmlFor={`checklist-${index}`}
+                        className="font-medium cursor-pointer text-sm"
+                      >
+                        {item.item}
+                      </Label>
+                    )}
                   </div>
                 ))}
               </div>
@@ -399,6 +459,37 @@ export function ReviewControlDialog({
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Desviaciones posibles */}
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold">Desviaciones detectadas</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Marque las desviaciones que apliquen a esta revisión (opcional). Las causas se gestionan en Configuración → Tipos de desviación (Tipo 2).
+              </p>
+            </div>
+            <div className="border rounded-lg p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {deviationTypes.map((dt) => (
+                  <div key={dt.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`deviation-${dt.id}`}
+                      checked={selectedDeviationTypeIds.includes(dt.id)}
+                      onCheckedChange={() => toggleDeviation(dt.id)}
+                    />
+                    <Label
+                      htmlFor={`deviation-${dt.id}`}
+                      className="font-medium cursor-pointer text-sm"
+                    >
+                      {dt.name}
+                    </Label>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -430,21 +521,23 @@ export function ReviewControlDialog({
               />
               <Camera className="h-4 w-4 text-muted-foreground" />
             </div>
-            {photos.length > 0 && (
+            {photoFiles.length > 0 && (
               <div className="grid grid-cols-4 gap-2 mt-2">
-                {photos.map((photo, index) => (
+                {photoFiles.map((file, index) => (
                   <div key={index} className="relative">
-                    <img
-                      src={photo}
-                      alt={`Foto ${index + 1}`}
-                      className="w-full h-20 object-cover rounded border"
-                    />
+                    {photoPreviewUrls[index] && (
+                      <img
+                        src={photoPreviewUrls[index]}
+                        alt={`Foto ${index + 1}`}
+                        className="w-full h-20 object-cover rounded border"
+                      />
+                    )}
                     <Button
                       type="button"
                       variant="destructive"
                       size="sm"
                       className="absolute top-0 right-0 h-5 w-5 p-0"
-                      onClick={() => setPhotos(photos.filter((_, i) => i !== index))}
+                      onClick={() => removePhoto(index)}
                     >
                       ×
                     </Button>

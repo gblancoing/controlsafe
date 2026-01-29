@@ -17,7 +17,7 @@ Usar esta configuración cuando se monte o despliegue un proyecto **Next.js** co
     binaryTargets = ["native", "debian-openssl-1.1.x"]
   }
   ```
-- Antes de generar el ZIP de producción: `npx prisma generate`.
+- El comando `npm run build:prod:zip` ya ejecuta `npx prisma generate` antes del build y del ZIP.
 - Sin esto, en producción aparece: *Prisma Client could not locate Query Engine for "debian-openssl-1.1.x"*.
 
 ## 2. Next.js standalone en cPanel
@@ -56,8 +56,9 @@ Usar esta configuración cuando se monte o despliegue un proyecto **Next.js** co
 ## 7. Comandos típicos
 
 ```powershell
-npx prisma generate
 npm run build:prod:zip
 ```
+
+(Incluye `npx prisma generate` + build + empaquetado.)
 
 En el servidor: subir ZIP → extraer → permisos 755 en carpetas → Start Application en Node.js App.

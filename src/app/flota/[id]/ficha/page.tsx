@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { getVehicleById } from '../../actions';
-import { Truck, Calendar, Wrench, Building2, ShieldCheck, Clock } from 'lucide-react';
+import { Truck, Calendar, Wrench, Building2, ShieldCheck, Clock, FileText } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { VehicleFichaQR } from './_components/vehicle-ficha-qr';
 import { ReviewHistoryCard } from './_components/review-history-card';
@@ -134,6 +134,55 @@ export default async function VehicleFichaPage({
                       <div>
                         <p className="text-sm font-medium">Empresa Propietaria</p>
                         <p className="text-sm text-muted-foreground">{vehicle.companyName}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {(vehicle.technicalReviewDate || vehicle.technicalReviewExpiryDate) && (
+                    <div className="flex items-start gap-3 pt-2 border-t">
+                      <ShieldCheck className="h-5 w-5 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Revisión Técnica</p>
+                        <div className="text-sm text-muted-foreground space-y-0.5">
+                          {vehicle.technicalReviewDate && (
+                            <p>Fecha revisión: {new Date(vehicle.technicalReviewDate).toLocaleDateString('es-CL')}</p>
+                          )}
+                          {vehicle.technicalReviewExpiryDate && (
+                            <p>Vencimiento: {new Date(vehicle.technicalReviewExpiryDate).toLocaleDateString('es-CL')}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {vehicle.circulationPermitStatus && (
+                    <div className="flex items-start gap-3">
+                      <Clock className="h-5 w-5 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Permiso Circulación</p>
+                        <p className="text-sm text-muted-foreground">{vehicle.circulationPermitStatus}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {vehicle.documents && vehicle.documents.length > 0 && (
+                    <div className="flex items-start gap-3 pt-2 border-t">
+                      <FileText className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium">Documentación</p>
+                      <ul className="text-sm text-muted-foreground mt-1 space-y-1">
+                        {vehicle.documents.map((doc) => {
+                          const fileSegment = doc.url.split('/').pop() || '';
+                          const href = `/api/files/vehicles/${vehicle.id}/${encodeURIComponent(fileSegment)}`;
+                          return (
+                            <li key={doc.id}>
+                              <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                {doc.fileName || doc.caption || doc.type}
+                              </a>
+                            </li>
+                          );
+                        })}
+                      </ul>
                       </div>
                     </div>
                   )}

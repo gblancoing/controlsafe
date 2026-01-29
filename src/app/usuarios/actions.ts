@@ -3,38 +3,59 @@
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { hashPassword } from '@/lib/auth';
 
-// Schema de validación para crear usuario
+const ROLE_VALUES = ['SuperAdmin', 'Administrator', 'Supervisor', 'Technician', 'Driver'] as const;
+
+// Schema de validación para crear usuario (empresa y proyecto obligatorios)
 const createUserSchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio').max(255),
   email: z.string().email('Email inválido').max(255),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
   phone: z.string().optional(),
-  role: z.enum(['Administrator', 'Supervisor', 'Technician', 'Driver']),
+  role: z.enum(ROLE_VALUES),
   canDrive: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
-  companyId: z.string().optional(),
-  projectId: z.string().optional(),
+  companyId: z.string().min(1, 'La empresa es obligatoria'),
+  projectId: z.string().min(1, 'El proyecto es obligatorio'),
 });
 
-// Schema de validación para actualizar usuario
+// Schema de validación para actualizar usuario (empresa y proyecto obligatorios)
 const updateUserSchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio').max(255),
   email: z.string().email('Email inválido').max(255),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
   phone: z.string().optional(),
-  role: z.enum(['Administrator', 'Supervisor', 'Technician', 'Driver']),
+  role: z.enum(ROLE_VALUES),
   canDrive: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
-  companyId: z.string().optional(),
-  projectId: z.string().optional(),
+  companyId: z.string().min(1, 'La empresa es obligatoria'),
+  projectId: z.string().min(1, 'El proyecto es obligatorio'),
 });
 
-// Obtener todos los usuarios (opcionalmente filtrados por empresa)
+// Obtener todos los usuarios (filtrados por alcance: SuperAdmin todos; Admin por proyecto; resto por empresa)
 export async function getUsers(companyId?: string) {
   try {
-    const where = companyId ? { companyId } : {};
-    
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedCompanyIds = await getAllowedCompanyIds();
+    const { getCurrentUserScope } = await import('@/lib/auth');
+    const scope = await getCurrentUserScope();
+
+    let where: Record<string, unknown> = {};
+    if (companyId) {
+      where = { companyId };
+    } else if (scope?.role === 'SuperAdmin') {
+      // Sin filtro
+    } else if (scope?.role === 'Administrator' && scope.projectId) {
+      where = { projectId: scope.projectId };
+    } else if (allowedCompanyIds !== null && allowedCompanyIds.length > 0) {
+      where = { companyId: { in: allowedCompanyIds } };
+    } else if (scope?.companyId) {
+      where = { companyId: scope.companyId };
+    } else {
+      return [];
+    }
+
     const users = await prisma.user.findMany({
       where,
       include: {
@@ -133,10 +154,14 @@ export async function getUserById(id: string) {
   }
 }
 
-// Obtener todas las empresas (para select)
+// Obtener todas las empresas (para select), filtradas por alcance del usuario
 export async function getAllCompanies() {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const where = allowedIds === null ? {} : { id: { in: allowedIds } };
     const companies = await prisma.company.findMany({
+      where,
       orderBy: { name: 'asc' },
     });
 
@@ -150,10 +175,14 @@ export async function getAllCompanies() {
   }
 }
 
-// Obtener todos los proyectos (para select)
+// Obtener todos los proyectos (para select), filtrados por alcance del usuario
 export async function getAllProjects() {
   try {
+    const { getAllowedProjectIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedProjectIds();
+    const where = allowedIds === null ? {} : { id: { in: allowedIds } };
     const projects = await prisma.project.findMany({
+      where,
       orderBy: { name: 'asc' },
     });
 
@@ -173,10 +202,10 @@ export async function createUser(input: {
   email: string;
   password: string;
   phone?: string;
-  role: 'Administrator' | 'Supervisor' | 'Technician' | 'Driver';
+  role: 'SuperAdmin' | 'Administrator' | 'Supervisor' | 'Technician' | 'Driver';
   canDrive?: boolean;
-  companyId?: string;
-  projectId?: string;
+  companyId: string;
+  projectId: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const validated = createUserSchema.parse(input);
@@ -195,27 +224,24 @@ export async function createUser(input: {
       return { success: false, error: 'Los choferes deben pertenecer a una empresa.' };
     }
 
-    // Nota: La creación en Firebase Authentication debe hacerse desde el cliente
-    // o usando Firebase Admin SDK en el servidor. Por ahora, solo creamos en la BD.
-    // La contraseña se usará cuando el usuario inicie sesión por primera vez.
-    // TODO: Implementar Firebase Admin SDK para crear usuarios desde el servidor
+    // Login con MySQL: guardar contraseña hasheada (bcrypt) en la BD
+    const passwordHash = await hashPassword(validated.password);
 
-    // Generar ID único
     const userId = `usr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Crear el usuario en la base de datos
-    await (prisma.user as any).create({
+    await prisma.user.create({
       data: {
         id: userId,
         name: validated.name,
         email: validated.email,
+        passwordHash,
         phone: validated.phone || null,
         role: validated.role,
         canDrive: validated.canDrive || false,
         isActive: validated.isActive !== undefined ? validated.isActive : true,
-        companyId: validated.companyId || null,
-        projectId: validated.projectId || null,
-      } as any,
+        companyId: validated.companyId,
+        projectId: validated.projectId,
+      },
     });
 
     revalidatePath('/usuarios');
@@ -229,7 +255,7 @@ export async function createUser(input: {
   }
 }
 
-// Actualizar un usuario
+// Actualizar un usuario (empresa y proyecto obligatorios)
 export async function updateUser(
   id: string,
   input: {
@@ -237,11 +263,11 @@ export async function updateUser(
     email: string;
     password?: string;
     phone?: string;
-    role: 'Administrator' | 'Supervisor' | 'Technician' | 'Driver';
+    role: 'SuperAdmin' | 'Administrator' | 'Supervisor' | 'Technician' | 'Driver';
     canDrive?: boolean;
     isActive?: boolean;
-    companyId?: string;
-    projectId?: string;
+    companyId: string;
+    projectId: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -259,44 +285,24 @@ export async function updateUser(
       return { success: false, error: `Ya existe otro usuario con el email "${validated.email}".` };
     }
 
-    // Validar que si es Driver, debe tener companyId
-    if (validated.role === 'Driver' && !validated.companyId) {
-      return { success: false, error: 'Los choferes deben pertenecer a una empresa.' };
-    }
-
-    // Si se proporciona una contraseña, actualizarla en Firebase
+    // Si se proporciona una contraseña, actualizar hash en MySQL
+    const updateData: Record<string, unknown> = {
+      name: validated.name,
+      email: validated.email,
+      phone: validated.phone ?? null,
+      role: validated.role,
+      canDrive: validated.canDrive ?? false,
+      isActive: validated.isActive ?? true,
+      companyId: validated.companyId,
+      projectId: validated.projectId,
+    };
     if (validated.password) {
-      try {
-        // Obtener el usuario actual para obtener su email
-        const currentUser = await prisma.user.findUnique({
-          where: { id },
-          select: { email: true },
-        });
-
-        if (currentUser) {
-          // Actualizar contraseña en Firebase
-          // Nota: Esto requiere Firebase Admin SDK o hacerlo desde el cliente
-          // Por ahora, solo actualizamos en la BD
-          // TODO: Implementar actualización de contraseña en Firebase
-        }
-      } catch (firebaseError: any) {
-        console.warn('Error al actualizar contraseña en Firebase:', firebaseError);
-        // Continuar con la actualización en la BD aunque Firebase falle
-      }
+      updateData.passwordHash = await hashPassword(validated.password);
     }
 
-    await (prisma.user as any).update({
+    await prisma.user.update({
       where: { id },
-      data: {
-        name: validated.name,
-        email: validated.email,
-        phone: validated.phone || null,
-        role: validated.role,
-        canDrive: validated.canDrive || false,
-        isActive: validated.isActive !== undefined ? validated.isActive : true,
-        companyId: validated.companyId || null,
-        projectId: validated.projectId || null,
-      },
+      data: updateData as Parameters<typeof prisma.user.update>[0]['data'],
     });
 
     revalidatePath('/usuarios');

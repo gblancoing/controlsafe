@@ -65,7 +65,7 @@ export function ProgramActions({ program }: { program: MaintenanceProgram }) {
         });
         router.refresh();
         setIsDeleting(false);
-      }, 100);
+      }, 150);
     }
   };
 

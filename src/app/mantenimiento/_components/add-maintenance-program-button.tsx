@@ -96,7 +96,7 @@ export function AddMaintenanceProgramButton() {
             description: `El programa "${name}" ha sido creado con éxito.`,
           });
           router.refresh();
-        }, 100);
+        }, 150);
       }
     });
   };

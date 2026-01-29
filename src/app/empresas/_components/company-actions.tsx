@@ -37,6 +37,7 @@ export function CompanyActions({ company }: { company: Company }) {
 
   const handleDelete = async () => {
     setIsDeleting(true);
+    let closed = false;
     try {
       const result = await deleteCompany(company.id);
       if (result.success) {
@@ -44,7 +45,9 @@ export function CompanyActions({ company }: { company: Company }) {
           title: 'Empresa eliminada',
           description: 'La empresa ha sido eliminada correctamente.',
         });
-        router.refresh();
+        setShowDeleteDialog(false);
+        closed = true;
+        setTimeout(() => router.refresh(), 150);
       } else {
         toast({
           title: 'Error',
@@ -60,7 +63,7 @@ export function CompanyActions({ company }: { company: Company }) {
       });
     } finally {
       setIsDeleting(false);
-      setShowDeleteDialog(false);
+      if (!closed) setShowDeleteDialog(false);
     }
   };
 

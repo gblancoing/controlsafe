@@ -32,7 +32,11 @@ export type ComplianceReport = {
 
 export async function getComplianceReport(): Promise<ComplianceReport> {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const vehicleWhere = allowedIds === null ? {} : { companyId: { in: allowedIds } };
     const assignments = await (prisma.vehicleMaintenanceProgram.findMany as any)({
+      where: { vehicle: vehicleWhere },
       include: {
         vehicle: {
           include: {
@@ -195,7 +199,11 @@ export type FleetStatusReport = {
 
 export async function getFleetStatusReport(): Promise<FleetStatusReport> {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const where = allowedIds === null ? {} : { companyId: { in: allowedIds } };
     const vehicles = await prisma.vehicle.findMany({
+      where,
       include: {
         company: {
           select: {
@@ -318,13 +326,18 @@ export type ProgramUtilizationReport = {
 
 export async function getProgramUtilizationReport(): Promise<ProgramUtilizationReport> {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const vehicleWhere = allowedIds === null ? {} : { vehicle: { companyId: { in: allowedIds } } };
     const programs = await prisma.maintenanceProgram.findMany({
       include: {
-        assignedVehicles: true,
+        assignedVehicles: { where: vehicleWhere },
       },
     });
 
+    const reviewVehicleWhere = allowedIds === null ? {} : { vehicle: { companyId: { in: allowedIds } } };
     const reviews = await (prisma.preventiveControlReview.findMany as any)({
+      where: reviewVehicleWhere,
       include: {
         vehicleMaintenanceProgram: {
           include: {
@@ -429,7 +442,11 @@ export type ReviewsReport = {
 
 export async function getReviewsReport(): Promise<ReviewsReport> {
   try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const vehicleWhere = allowedIds === null ? {} : { companyId: { in: allowedIds } };
     const reviews = await (prisma.preventiveControlReview.findMany as any)({
+      where: { vehicle: vehicleWhere },
       include: {
         vehicle: {
           include: {
@@ -537,6 +554,204 @@ export async function getReviewsReport(): Promise<ReviewsReport> {
       byMonth: [],
       byCompany: [],
       byProgram: [],
+    };
+  }
+}
+
+// ============================================
+// Reporte de Desviaciones (causas detectadas en revisiones)
+// ============================================
+const VEHICLE_TYPE_LABELS: Record<string, string> = {
+  Excavator: 'Excavadora',
+  'Haul Truck': 'Camión Minero',
+  HaulTruck: 'Camión Minero',
+  Dozer: 'Topadora',
+  Loader: 'Cargador',
+  Camioneta: 'Camioneta',
+};
+
+export type DeviationsReport = {
+  totalOccurrences: number;
+  reviewsWithDeviations: number;
+  totalReviews: number;
+  byDeviationType: Array<{
+    deviationTypeId: string;
+    name: string;
+    count: number;
+    percentage: number;
+  }>;
+  byMonth: Array<{
+    month: string;
+    total: number;
+    topCauses: Array<{ name: string; count: number }>;
+  }>;
+  byCompany: Array<{
+    companyId: string;
+    companyName: string;
+    total: number;
+    percentage: number;
+    topCauses: Array<{ name: string; count: number }>;
+  }>;
+  byVehicleType: Array<{
+    vehicleType: string;
+    vehicleTypeLabel: string;
+    total: number;
+    percentage: number;
+    topCauses: Array<{ name: string; count: number }>;
+  }>;
+};
+
+export async function getDeviationsReport(): Promise<DeviationsReport> {
+  try {
+    const { getAllowedCompanyIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedCompanyIds();
+    const vehicleWhere = allowedIds === null ? {} : { companyId: { in: allowedIds } };
+    const reviewWhere = allowedIds === null ? {} : { review: { vehicle: vehicleWhere } };
+    const reviewDeviations = await (prisma as any).reviewDeviation.findMany({
+      where: reviewWhere,
+      include: {
+        deviationType: { select: { id: true, name: true } },
+        review: {
+          select: {
+            reviewDate: true,
+            vehicleId: true,
+            vehicle: {
+              select: {
+                type: true,
+                companyId: true,
+                company: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const totalReviews = await (prisma as any).preventiveControlReview.count({
+      where: { vehicle: vehicleWhere },
+    });
+
+    const byTypeMap = new Map<string, { deviationTypeId: string; name: string; count: number }>();
+    const reviewIdsWithDeviations = new Set<string>();
+    const byCompanyMap = new Map<string, { companyId: string; companyName: string; total: number; byCause: Map<string, number> }>();
+    const byVehicleTypeMap = new Map<string, { vehicleType: string; total: number; byCause: Map<string, number> }>();
+
+    for (const rd of reviewDeviations) {
+      const typeId = rd.deviationTypeId;
+      const causeName = rd.deviationType?.name || 'Desconocido';
+      if (!byTypeMap.has(typeId)) {
+        byTypeMap.set(typeId, { deviationTypeId: typeId, name: causeName, count: 0 });
+      }
+      byTypeMap.get(typeId)!.count++;
+      if (rd.reviewId) reviewIdsWithDeviations.add(rd.reviewId);
+
+      const vehicle = rd.review?.vehicle;
+      const companyId = vehicle?.companyId || 'sin-empresa';
+      const companyName = vehicle?.company?.name || 'Sin empresa';
+      if (!byCompanyMap.has(companyId)) {
+        byCompanyMap.set(companyId, { companyId, companyName, total: 0, byCause: new Map() });
+      }
+      const companyData = byCompanyMap.get(companyId)!;
+      companyData.total++;
+      companyData.byCause.set(causeName, (companyData.byCause.get(causeName) || 0) + 1);
+
+      const rawType = vehicle?.type ?? 'Otro';
+      const vehicleTypeKey = String(rawType);
+      if (!byVehicleTypeMap.has(vehicleTypeKey)) {
+        byVehicleTypeMap.set(vehicleTypeKey, { vehicleType: vehicleTypeKey, total: 0, byCause: new Map() });
+      }
+      const typeData = byVehicleTypeMap.get(vehicleTypeKey)!;
+      typeData.total++;
+      typeData.byCause.set(causeName, (typeData.byCause.get(causeName) || 0) + 1);
+    }
+
+    const totalOccurrences = reviewDeviations.length;
+    const reviewsWithDeviations = reviewIdsWithDeviations.size;
+    const byDeviationType = Array.from(byTypeMap.values())
+      .map((row) => ({
+        ...row,
+        percentage: totalOccurrences > 0 ? Math.round((row.count / totalOccurrences) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const byMonthMap = new Map<string, Map<string, number>>();
+    for (const rd of reviewDeviations) {
+      const reviewDate = rd.review?.reviewDate;
+      if (!reviewDate) continue;
+      const d = new Date(reviewDate);
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const typeName = rd.deviationType?.name || 'Desconocido';
+      if (!byMonthMap.has(monthKey)) {
+        byMonthMap.set(monthKey, new Map());
+      }
+      const typeCount = byMonthMap.get(monthKey)!;
+      typeCount.set(typeName, (typeCount.get(typeName) || 0) + 1);
+    }
+
+    const byMonthSorted = Array.from(byMonthMap.keys())
+      .sort()
+      .reverse()
+      .slice(0, 12)
+      .map((key) => {
+        const typeCounts = byMonthMap.get(key)!;
+        const [y, m] = key.split('-');
+        const monthLabel = new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('es-ES', {
+          year: 'numeric',
+          month: 'long',
+        });
+        const topCauses = Array.from(typeCounts.entries())
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5);
+        const total = Array.from(typeCounts.values()).reduce((s, c) => s + c, 0);
+        return { month: monthLabel, total, topCauses };
+      });
+
+    const byCompany = Array.from(byCompanyMap.values())
+      .map((row) => ({
+        companyId: row.companyId,
+        companyName: row.companyName,
+        total: row.total,
+        percentage: totalOccurrences > 0 ? Math.round((row.total / totalOccurrences) * 100) : 0,
+        topCauses: Array.from(row.byCause.entries())
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5),
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    const byVehicleType = Array.from(byVehicleTypeMap.values())
+      .map((row) => ({
+        vehicleType: row.vehicleType,
+        vehicleTypeLabel: VEHICLE_TYPE_LABELS[row.vehicleType] || row.vehicleType,
+        total: row.total,
+        percentage: totalOccurrences > 0 ? Math.round((row.total / totalOccurrences) * 100) : 0,
+        topCauses: Array.from(row.byCause.entries())
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5),
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      totalOccurrences,
+      reviewsWithDeviations,
+      totalReviews,
+      byDeviationType,
+      byMonth: byMonthSorted,
+      byCompany,
+      byVehicleType,
+    };
+  } catch (error) {
+    console.error('Error generating deviations report:', error);
+    return {
+      totalOccurrences: 0,
+      reviewsWithDeviations: 0,
+      totalReviews: 0,
+      byDeviationType: [],
+      byMonth: [],
+      byCompany: [],
+      byVehicleType: [],
     };
   }
 }

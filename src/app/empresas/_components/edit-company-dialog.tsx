@@ -62,8 +62,8 @@ export function EditCompanyDialog({
           title: 'Empresa Actualizada',
           description: `La empresa ${name} ha sido actualizada con éxito.`,
         });
-        router.refresh();
         onOpenChange(false);
+        setTimeout(() => router.refresh(), 150);
       }
     });
   };

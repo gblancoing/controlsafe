@@ -84,47 +84,29 @@ export function EditUserDialog({
       setError('El nombre, email y rol son obligatorios.');
       return;
     }
-
-    if (selectedRole === 'Driver' && (!companyId || companyId === '__none__')) {
-      setError('Los choferes deben pertenecer a una empresa.');
+    if (!companyId || companyId === '__none__') {
+      setError('Debe seleccionar una empresa.');
       return;
     }
-
-    // Normalizar companyId: si es "__none__" o vacío, usar undefined
-    const finalCompanyId = companyId && companyId !== '__none__' ? companyId : undefined;
-    // Normalizar projectId: si es "__none__" o vacío, usar undefined
-    const finalProjectId = projectId && projectId !== '__none__' ? projectId : undefined;
-
-    // Validar contraseña si se proporciona
+    if (!projectId || projectId === '__none__') {
+      setError('Debe seleccionar un proyecto.');
+      return;
+    }
     if (password && password.length < 6) {
       setError('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
 
-    startTransition(async () => {
-      // Si se proporciona contraseña, actualizarla en Firebase
-      if (password) {
-        try {
-          const { updatePassword } = await import('firebase/auth');
-          const { auth } = await import('@/lib/firebase/config');
-          const { signInWithEmailAndPassword } = await import('firebase/auth');
-          
-          // Primero autenticar con la contraseña actual (si es necesario)
-          // Nota: Para actualizar la contraseña, necesitamos estar autenticados
-          // Por ahora, solo intentamos actualizar si Firebase está configurado
-          // TODO: Implementar actualización de contraseña con Firebase Admin SDK
-        } catch (firebaseError: any) {
-          console.warn('Error al actualizar contraseña en Firebase:', firebaseError);
-          // Continuar con la actualización en la BD aunque Firebase falle
-        }
-      }
+    const finalCompanyId = companyId;
+    const finalProjectId = projectId;
 
+    startTransition(async () => {
       const result = await updateUser(user.id, {
         name,
         email,
         password: password || undefined,
         phone: phone || undefined,
-        role: selectedRole as 'Administrator' | 'Supervisor' | 'Technician' | 'Driver',
+        role: selectedRole as 'SuperAdmin' | 'Administrator' | 'Supervisor' | 'Technician' | 'Driver',
         canDrive,
         isActive,
         companyId: finalCompanyId,
@@ -140,7 +122,7 @@ export function EditUserDialog({
             description: `El usuario ${name} ha sido actualizado con éxito.`,
           });
           router.refresh();
-        }, 100);
+        }, 150);
       }
     });
   };
@@ -209,6 +191,7 @@ export function EditUserDialog({
                   <SelectValue placeholder="Seleccione un rol" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="SuperAdmin">Super Admin</SelectItem>
                   <SelectItem value="Administrator">Administrador</SelectItem>
                   <SelectItem value="Supervisor">Supervisor</SelectItem>
                   <SelectItem value="Technician">Técnico</SelectItem>
@@ -238,23 +221,16 @@ export function EditUserDialog({
                 </Label>
               </div>
             </div>
-            {/* Campo de Empresa - siempre visible */}
+            {/* Empresa y Proyecto obligatorios */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit-companyId" className="text-right">
-                Empresa {role === 'Driver' ? '' : '(Opcional)'}
+                Empresa
               </Label>
-              <Select name="companyId" required={role === 'Driver'} defaultValue={user.companyId || '__none__'}>
+              <Select name="companyId" required defaultValue={user.companyId || ''}>
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder={
-                    role === 'Driver' 
-                      ? "Seleccione una empresa" 
-                      : "Seleccione una empresa (opcional)"
-                  } />
+                  <SelectValue placeholder="Seleccione una empresa" />
                 </SelectTrigger>
                 <SelectContent>
-                  {role !== 'Driver' && (
-                    <SelectItem value="__none__">Sin empresa</SelectItem>
-                  )}
                   {companies.map((company) => (
                     <SelectItem key={company.id} value={company.id}>
                       {company.name}
@@ -263,17 +239,15 @@ export function EditUserDialog({
                 </SelectContent>
               </Select>
             </div>
-            {/* Campo de Proyecto - siempre visible */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit-projectId" className="text-right">
-                Proyecto (Opcional)
+                Proyecto
               </Label>
-              <Select name="projectId" defaultValue={user.projectId || '__none__'}>
+              <Select name="projectId" required defaultValue={user.projectId || ''}>
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Seleccione un proyecto (opcional)" />
+                  <SelectValue placeholder="Seleccione un proyecto" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">Sin proyecto</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}

@@ -1,0 +1,2 @@
+# Mantiene la carpeta uploads en el repositorio y en el .zip de producción.
+# Los archivos subidos (vehículos, revisiones) se guardan aquí en runtime y no se versionan.

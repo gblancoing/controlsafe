@@ -37,6 +37,7 @@ export function ProjectActions({ project }: { project: Project }) {
 
   const handleDelete = async () => {
     setIsDeleting(true);
+    let closed = false;
     try {
       const result = await deleteProject(project.id);
       if (result.success) {
@@ -44,7 +45,9 @@ export function ProjectActions({ project }: { project: Project }) {
           title: 'Proyecto eliminado',
           description: 'El proyecto ha sido eliminado correctamente.',
         });
-        router.refresh();
+        setShowDeleteDialog(false);
+        closed = true;
+        setTimeout(() => router.refresh(), 150);
       } else {
         toast({
           title: 'Error',
@@ -60,7 +63,7 @@ export function ProjectActions({ project }: { project: Project }) {
       });
     } finally {
       setIsDeleting(false);
-      setShowDeleteDialog(false);
+      if (!closed) setShowDeleteDialog(false);
     }
   };
 

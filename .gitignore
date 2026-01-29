@@ -17,6 +17,10 @@
 /.next/
 /out/
 
+# archivos subidos por la app (documentación de vehículos, etc.); la carpeta public/uploads sí se incluye en el repo
+/public/uploads/*
+!/public/uploads/.gitkeep
+
 # production
 /build
 *.zip

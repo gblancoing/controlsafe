@@ -98,8 +98,8 @@ export function EditProjectDialog({
           title: 'Proyecto Actualizado',
           description: `El proyecto ${name} ha sido actualizado con éxito.`,
         });
-        router.refresh();
         onOpenChange(false);
+        setTimeout(() => router.refresh(), 150);
       }
     });
   };

@@ -109,11 +109,10 @@ export function MaintenanceProgramsCard({
           description: 'El programa de mantenimiento ha sido asignado correctamente.',
         });
         setSelectedProgramId('');
-        // Recargar datos después de un breve delay para asegurar que la DB se actualizó
         setTimeout(() => {
           loadData();
           router.refresh();
-        }, 500);
+        }, 150);
       } else {
         console.error('[Asignar Programa] Error:', result.error);
         toast({
@@ -133,8 +132,10 @@ export function MaintenanceProgramsCard({
           title: 'Programa eliminado',
           description: 'El programa de mantenimiento ha sido eliminado correctamente.',
         });
-        loadData();
-        router.refresh();
+        setTimeout(() => {
+          loadData();
+          router.refresh();
+        }, 150);
       } else {
         toast({
           title: 'Error',

@@ -6,20 +6,22 @@ import {
 } from '@/components/ui/sidebar';
 import { SidebarNav } from './sidebar-nav';
 import { UserNav } from './user-nav';
-import { getUsers } from '@/lib/db-queries';
+import { getSessionUserId } from '@/lib/auth';
+import { getUserById } from '@/lib/db-queries';
 import { Truck } from 'lucide-react';
 
 export async function AppSidebar() {
   try {
-    const users = await getUsers();
-    // Buscar un usuario Administrator, si no existe usar el primero disponible
-    const currentUser = users.find(u => u.role === 'Administrator') || users[0] || {
-      id: 'admin',
-      name: 'Administrador',
-      email: 'admin@controlsafe.com',
-      role: 'Administrator' as const,
+    const userId = await getSessionUserId();
+    const currentUser = userId
+      ? await getUserById(userId)
+      : null;
+    const displayUser = currentUser ?? {
+      id: 'guest',
+      name: 'Usuario',
+      email: '',
+      role: 'Driver' as const,
     };
-    const footerUser = users[0] || currentUser;
 
     return (
       <Sidebar collapsible="icon">
@@ -34,10 +36,10 @@ export async function AppSidebar() {
           </div>
         </SidebarHeader>
         <SidebarContent className="p-2">
-          <SidebarNav currentUser={currentUser} />
+          <SidebarNav currentUser={displayUser} />
         </SidebarContent>
         <SidebarFooter className="p-4">
-          <UserNav user={footerUser} />
+          <UserNav user={displayUser} />
         </SidebarFooter>
       </Sidebar>
     );

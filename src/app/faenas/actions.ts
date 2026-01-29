@@ -13,10 +13,14 @@ const createProjectSchema = z.object({
   subcontractorIds: z.array(z.string()).optional().default([]),
 });
 
-// Obtener todos los proyectos
+// Obtener todos los proyectos (filtrados por alcance: SuperAdmin todos; Admin/resto solo el suyo)
 export async function getProjects(): Promise<Project[] | null> {
   try {
+    const { getAllowedProjectIds } = await import('@/lib/scope');
+    const allowedIds = await getAllowedProjectIds();
+    const where = allowedIds === null ? {} : { id: { in: allowedIds } };
     const projects = await prisma.project.findMany({
+      where,
       include: {
         clientCompany: true,
         subcontractors: {

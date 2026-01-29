@@ -84,7 +84,7 @@ export function EditVehicleTypeDialog({
           description: 'El tipo de vehículo se ha actualizado correctamente.',
         });
         onOpenChange(false);
-        router.refresh();
+        setTimeout(() => router.refresh(), 150);
       } else {
         toast({
           title: 'Error',

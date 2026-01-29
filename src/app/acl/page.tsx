@@ -20,28 +20,87 @@ import { Badge } from '@/components/ui/badge';
 import { Key } from 'lucide-react';
 
 export default async function ACLPage() {
-  // Definir roles y sus permisos según el estado actual del proyecto
+  // Roles y permisos según la política de alcance: SuperAdmin todo; Admin por proyecto; Supervisor/Técnico/Chofer por empresa.
   const roles = [
     {
+      role: 'SuperAdmin',
+      roleLabel: 'Super Admin',
+      scope: 'Todos los proyectos y empresas. Sin filtro.',
+      description: 'Control total del sistema. Ve y gestiona todos los datos, usuarios, empresas, proyectos y configuraciones.',
+      modules: [
+        'Panel de Control',
+        'Empresas',
+        'Proyectos',
+        'Flota',
+        'Mantenimiento',
+        'Control Preventivo',
+        'Historial',
+        'Reportes',
+        'Usuarios',
+        'Roles y Permisos',
+        'Configuración',
+      ],
+      badgeVariant: 'default' as const,
+    },
+    {
       role: 'Administrator',
-      roleLabel: 'Administrator',
-      description: 'Tiene control total sobre la aplicación. Puede gestionar usuarios, empresas, proyectos y configuraciones del sistema.',
-      modules: ['Todo', 'Gestión de Usuarios', 'Gestión de Empresas', 'Gestión de Proyectos', 'Configuración'],
+      roleLabel: 'Administrador',
+      scope: 'Solo el proyecto asignado y las empresas de ese proyecto (mandante + subcontratistas).',
+      description: 'Administra su proyecto. Gestiona usuarios, empresas y datos dentro de su proyecto; no ve otros proyectos.',
+      modules: [
+        'Panel de Control',
+        'Empresas',
+        'Proyectos',
+        'Flota',
+        'Mantenimiento',
+        'Control Preventivo',
+        'Historial',
+        'Reportes',
+        'Usuarios',
+        'Roles y Permisos',
+        'Configuración',
+      ],
       badgeVariant: 'default' as const,
     },
     {
       role: 'Supervisor',
       roleLabel: 'Supervisor',
-      description: 'Gestiona las operaciones diarias. Puede administrar la flota, los programas de mantenimiento y ver reportes, pero no puede gestionar usuarios ni empresas.',
-      modules: ['Proyectos', 'Flota', 'Programas', 'Control Preventivo', 'Historial', 'Reportes'],
+      scope: 'Solo la empresa asignada. Datos filtrados por empresa.',
+      description: 'Supervisa operaciones de su empresa. Flota, mantenimiento, control preventivo, historial y reportes de su empresa.',
+      modules: [
+        'Panel de Control',
+        'Proyectos',
+        'Flota',
+        'Mantenimiento',
+        'Control Preventivo',
+        'Historial',
+        'Reportes',
+      ],
       badgeVariant: 'secondary' as const,
     },
     {
       role: 'Technician',
-      roleLabel: 'Technician',
-      description: 'Ejecuta las tareas de mantenimiento. Puede ver la flota, el control preventivo y registrar intervenciones en el historial.',
-      modules: ['Flota', 'Control Preventivo', 'Historial'],
+      roleLabel: 'Técnico',
+      scope: 'Solo la empresa asignada. Datos filtrados por empresa.',
+      description: 'Ejecuta tareas de mantenimiento y controles preventivos. Ve flota, historial y reportes de su empresa.',
+      modules: [
+        'Panel de Control',
+        'Proyectos',
+        'Flota',
+        'Mantenimiento',
+        'Control Preventivo',
+        'Historial',
+        'Reportes',
+      ],
       badgeVariant: 'secondary' as const,
+    },
+    {
+      role: 'Driver',
+      roleLabel: 'Chofer',
+      scope: 'Solo la empresa asignada. Acceso limitado a reportes.',
+      description: 'Rol operativo. Acceso a reportes para consultar información de su ámbito.',
+      modules: ['Reportes'],
+      badgeVariant: 'outline' as const,
     },
   ];
 
@@ -70,12 +129,14 @@ export default async function ACLPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="overflow-x-auto -mx-2 sm:mx-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[150px]">Rol</TableHead>
+                      <TableHead className="w-[140px]">Rol</TableHead>
+                      <TableHead className="w-[220px]">Alcance</TableHead>
                       <TableHead>Descripción</TableHead>
-                      <TableHead>Módulos Accesibles</TableHead>
+                      <TableHead className="min-w-[200px]">Módulos Accesibles</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -86,7 +147,10 @@ export default async function ACLPage() {
                             {role.roleLabel}
                           </Badge>
                         </TableCell>
-                        <TableCell className="max-w-md">
+                        <TableCell className="text-sm text-muted-foreground">
+                          {role.scope}
+                        </TableCell>
+                        <TableCell className="max-w-sm">
                           <p className="text-sm">{role.description}</p>
                         </TableCell>
                         <TableCell>
@@ -102,6 +166,7 @@ export default async function ACLPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           </div>

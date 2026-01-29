@@ -17,16 +17,12 @@
 
 ### 1. Generar el ZIP en tu PC
 
-**Importante:** El servidor es Linux (Debian). En `prisma/schema.prisma` debe estar `binaryTargets = ["native", "debian-openssl-1.1.x"]` para que Prisma funcione en producción. Si lo acabas de añadir o cambiar, ejecuta antes:
+**Importante:** El servidor es Linux (Debian). En `prisma/schema.prisma` debe estar `binaryTargets = ["native", "debian-openssl-1.1.x"]` para que Prisma funcione en producción.
+
+Genera el ZIP (incluye `npx prisma generate` + build + empaquetado en un solo comando):
 
 ```powershell
 cd c:\xampp\htdocs\controlsafe
-npx prisma generate
-```
-
-Luego genera el ZIP:
-
-```powershell
 npm run build:prod:zip
 ```
 
@@ -117,6 +113,7 @@ En **cPanel → Setup Node.js App** → tu app → **Environment variables** (o 
 | Variable | Valor | Para qué |
 |----------|--------|----------|
 | `NODE_ENV` | `production` | Modo producción. |
+| **`SESSION_SECRET`** | Cadena aleatoria de **al menos 32 caracteres** | **Obligatorio para el login.** Se usa para firmar la cookie de sesión. Sin ella aparece "Error al iniciar sesión". Generar con: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
 | `DATABASE_URL` | `mysql://usuario:contraseña@host:3306/controlsafe` | Conexión a MySQL del **hosting** (no uses `localhost` si la BD está en otro servidor). |
 | `NEXT_PUBLIC_APP_URL` | `https://controlsafe.carenvp.cl` | URL pública de la app (redirects, enlaces en emails, etc.). |
 
@@ -125,12 +122,12 @@ Si usas envío de emails (recuperar contraseña, notificaciones):
 | Variable | Ejemplo |
 |----------|---------|
 | `SMTP_HOST` | `mail.carenvp.cl` |
-| `SMTP_PORT` | `587` |
+| `SMTP_PORT` | `465` (cPanel "Secure SSL/TLS") o `587` (STARTTLS) |
 | `SMTP_USER` | `controlsafe@carenvp.cl` |
 | `SMTP_PASSWORD` | (contraseña del correo) |
 | `SMTP_FROM` | `ControlSafe <controlsafe@carenvp.cl>` |
 
-Sin `DATABASE_URL` correcta, las acciones que tocan la base de datos (crear/editar vehículos, usuarios, etc.) fallan. Sin `NEXT_PUBLIC_APP_URL` correcta, los enlaces y redirects pueden apuntar a localhost.
+Sin **`SESSION_SECRET`**, el login falla con "Error al iniciar sesión" (el log dirá: *SESSION_SECRET debe estar definido en .env con al menos 32 caracteres*). Sin `DATABASE_URL` correcta, las acciones que tocan la base de datos fallan. Sin `NEXT_PUBLIC_APP_URL` correcta, los enlaces y redirects pueden apuntar a localhost.
 
 ### 2. URL de la app también en el build (recomendado)
 
@@ -158,7 +155,7 @@ Si una acción no hace nada o la página no cambia:
 
 | Error | Causa | Solución |
 |-------|--------|----------|
-| **Prisma Client could not locate Query Engine for "debian-openssl-1.1.x"** | El cliente se generó solo para Windows. | En `prisma/schema.prisma` pon `binaryTargets = ["native", "debian-openssl-1.1.x"]`, ejecuta `npx prisma generate` y vuelve a hacer `npm run build:prod:zip` y subir el ZIP. |
+| **Prisma Client could not locate Query Engine for "debian-openssl-1.1.x"** | El cliente se generó solo para Windows. | En `prisma/schema.prisma` pon `binaryTargets = ["native", "debian-openssl-1.1.x"]` y vuelve a ejecutar `npm run build:prod:zip` (ya incluye prisma generate) y subir el ZIP. |
 | **/flota.jpg received null** | La carpeta `public` no estaba dentro del standalone. | El script ya copia `public/` al standalone; regenera el ZIP con el script actual y vuelve a desplegar. |
 | **Panel de Control lleva fuera** | El enlace apuntaba a `/` (landing). | Corregido: el sidebar enlaza a `/dashboard`. |
 | **Select.Item value empty string** | Radix no permite `value=""`. | Corregido: se usa `value="__no_types__"` cuando no hay tipos. |
@@ -169,7 +166,7 @@ Si una acción no hace nada o la página no cambia:
 
 - **Script que genera el ZIP:** `scripts/build-and-package.ps1` (copia todo `.next` y `public` al standalone, usa 7-Zip, instala next en standalone si falta).
 - **Prisma:** `prisma/schema.prisma` con `binaryTargets = ["native", "debian-openssl-1.1.x"]` para Linux.
-- **Comando:** `npm run build:prod:zip` (en `package.json`). Antes, si cambiaste Prisma: `npx prisma generate`.
+- **Comando:** `npm run build:prod:zip` (en `package.json`; incluye `npx prisma generate` + build + ZIP).
 - **Guía única de despliegue:** este archivo (`SOLUCION_DEFINITIVA_503.md`).
 
 **Última actualización:** Enero 2026
